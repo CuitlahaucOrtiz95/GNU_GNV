@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapa GNV · PetroIntelligence</title>
+  <link rel="preconnect" href="https://unpkg.com" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --primary: #1F5CA9;
+      --primary-hover: #004a8f;
+      --secondary: #27BFF0;
+      --bg-main: #f0f4f8;
+      --bg-panel: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --border-hover: #cbd5e1;
+      --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.08);
+      --transition: all 0.2s ease-in-out;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-main); }
+    
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    .shell {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 100%;
+      background: var(--bg-panel);
+      box-shadow: var(--shadow-lg);
+    }
+    
+    .topbar {
+      background: linear-gradient(135deg, #1F5CA9 0%, #0082D6 50%, #27BFF0 100%);
+      color: #fff;
+      padding: 0.6rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+      flex-shrink: 0;
+      box-shadow: var(--shadow-sm);
+      z-index: 10;
+    }
+    .topbar .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.15rem; letter-spacing: -0.02em; }
+    .topbar .brand i { font-size: 1.3rem; color: rgba(255,255,255,0.9); }
+    .topbar .readouts { display: flex; gap: 0.8rem; flex-wrap: wrap; align-items: center; }
+    .topbar .readout { 
+      background: rgba(255,255,255,0.15); border-radius: 2rem; 
+      padding: 0.25rem 0.8rem; display: flex; align-items: baseline; gap: 0.4rem; font-size: 0.85rem; 
+      backdrop-filter: blur(4px);
+    }
+    .topbar .readout .num { font-weight: 700; font-size: 1.1rem; }
+    .topbar .status-badge {
+      background: rgba(255,255,255,0.2); border-radius: 2rem;
+      padding: 0.25rem 0.8rem; font-size: 0.75rem; display: flex; align-items: center; gap: 0.4rem;
+      font-weight: 500;
+    }
+
+    .toolbar {
+      background: #f8fafc; padding: 0.6rem 1.5rem; border-bottom: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; flex-shrink: 0; z-index: 9;
+    }
+    .toolbar .search { 
+      flex: 1; min-width: 180px; display: flex; align-items: center;
+      background: var(--bg-panel); border: 1px solid var(--border); border-radius: 2rem; 
+      padding: 0.3rem 1rem; transition: var(--transition);
+    }
+    .toolbar .search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31,92,169,0.1); }
+    .toolbar .search input { border: none; outline: none; flex: 1; padding: 0.3rem 0.5rem; font-size: 0.85rem; background: transparent; }
+    .toolbar .search i { color: #94a3b8; }
+    
+    .toolbar .filters select { 
+      padding: 0.4rem 2rem 0.4rem 1rem; border-radius: 2rem; border: 1px solid var(--border); 
+      background: var(--bg-panel); font-size: 0.85rem; cursor: pointer; appearance: none; color: var(--text-main);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236A767D' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); 
+      background-repeat: no-repeat; background-position: right 0.8rem center; background-size: 10px;
+      transition: var(--transition);
+    }
+    .toolbar .filters select:hover { border-color: #cbd5e1; }
+    .toolbar .filters select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31,92,169,0.1); }
+    
+    .toolbar .btn {
+      background: var(--border); color: var(--text-main); border: none; border-radius: 2rem;
+      padding: 0.4rem 1rem; font-size: 0.8rem; font-weight: 500; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 0.4rem; transition: var(--transition);
+      white-space: nowrap;
+    }
+    .toolbar .btn:hover { background: var(--border-hover); }
+    .toolbar .btn:active { transform: scale(0.96); }
+    .toolbar .btn-primary { background: var(--primary); color: #fff; }
+    .toolbar .btn-primary:hover { background: var(--primary-hover); }
+    .toolbar .btn-secondary { background: #6b7280; color: #fff; }
+    .toolbar .btn-secondary:hover { background: #4b5563; }
+    .toolbar .btn-clear-all { background: #fee2e2; color: #ef4444; }
+    .toolbar .btn-clear-all:hover { background: #fecaca; }
+    .toolbar .btn-clear-all.hidden { display: none; }
+    
+    .toolbar .separator {
+      width: 1px;
+      height: 24px;
+      background: var(--border);
+      margin: 0 0.2rem;
+    }
+
+    .toolbar .btn-loc .spinner { display: none; animation: spin 0.8s linear infinite; }
+    .toolbar .btn-loc.loading .spinner { display: inline-block; }
+    .toolbar .btn-loc.loading .loc-icon { display: none; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+
+    .stage { display: flex; flex: 1; overflow: hidden; position: relative; }
+    #map { flex: 1; height: 100%; min-height: 300px; z-index: 1; }
+    
+    .rail {
+      width: 280px; max-height: 100%; overflow-y: auto; overflow-x: hidden;
+      border-left: 1px solid var(--border); background: var(--bg-panel); flex-shrink: 0;
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .rail.hidden { width: 0; border-left: none; }
+    .rail-head {
+      padding: 1rem 1.2rem; background: #f8fafc; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      font-weight: 600; font-size: 0.85rem; color: var(--text-main);
+      position: sticky; top: 0; z-index: 2;
+    }
+    .rail-list { list-style: none; padding: 0; margin: 0; }
+    .rail-list li {
+      padding: 0.8rem 1.2rem; border-bottom: 1px solid #f1f5f9; cursor: pointer;
+      display: flex; flex-direction: column; gap: 0.3rem;
+      font-size: 0.85rem; transition: var(--transition);
+    }
+    .rail-list li:hover { background: #f8fafc; padding-left: 1.5rem; }
+    .rail-list li .top-row { display: flex; justify-content: space-between; align-items: center; }
+    .rail-list li .name { font-weight: 600; color: var(--text-main); }
+    .rail-list li .price { font-weight: 700; color: var(--primary); font-size: 0.9rem; }
+    .rail-list li .state-tag { 
+      background: #e0f2fe; color: #0369a1; padding: 0.15rem 0.5rem; 
+      border-radius: 1rem; font-size: 0.65rem; font-weight: 500; align-self: flex-start;
+    }
+    .empty { padding: 3rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.9rem; }
+
+    .gnv-cluster { background: transparent; }
+    .gnv-cluster .bubble {
+      width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center;
+      font-weight: 700; color: #fff; background: radial-gradient(circle at 30% 30%, #5bc0eb, var(--primary) 80%);
+      border: 2px solid #fff; box-shadow: 0 0 0 4px rgba(39,191,240,0.2), var(--shadow-sm);
+      cursor: pointer; transition: transform 0.2s;
+    }
+    .gnv-cluster:hover .bubble { transform: scale(1.05); }
+    
+    .location-marker { background: none; border: none; }
+    .location-marker .dot {
+      width: 18px; height: 18px; border-radius: 50%; background: var(--secondary);
+      border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(39,191,240,0.25), 0 0 12px rgba(39,191,240,0.7);
+    }
+
+    /* Leyenda de precios (GNV) */
+    .price-legend {
+      background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px);
+      padding: 12px 16px; border-radius: 12px; box-shadow: var(--shadow-lg);
+      font-size: 12px; line-height: 1.6; min-width: 160px;
+      border: 1px solid rgba(255,255,255,0.5); cursor: default;
+    }
+    .price-legend .title {
+      font-weight: 700; margin-bottom: 8px; font-size: 13px; color: var(--text-main);
+      border-bottom: 1px solid var(--border); padding-bottom: 6px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .price-legend .title .clear-btn {
+      background: none; border: none; color: var(--text-muted); font-size: 11px;
+      cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: var(--transition);
+    }
+    .price-legend .title .clear-btn:hover { background: #f1f5f9; color: #ef4444; }
+    .price-legend .row {
+      display: flex; align-items: center; gap: 8px; margin: 4px 0; padding: 4px 8px;
+      border-radius: 6px; cursor: pointer; transition: var(--transition);
+    }
+    .price-legend .row:hover { background: #f8fafc; }
+    .price-legend .row.active { background: #f0f9ff; box-shadow: inset 0 0 0 1px var(--secondary); }
+    .price-legend .color-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1); }
+    .price-legend .label { color: var(--text-main); flex: 1; font-weight: 500; }
+    .price-legend .count { font-size: 10px; color: var(--text-muted); background: var(--bg-main); padding: 2px 6px; border-radius: 10px; font-weight: 600; }
+
+    /* Leyenda de ductos */
+    .ducto-legend {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(6px);
+      padding: 10px 14px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      font-size: 10px;
+      line-height: 1.4;
+      min-width: 120px;
+      border: 1px solid rgba(255,255,255,0.5);
+      cursor: default;
+      z-index: 1000;
+    }
+    .ducto-legend .title {
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--text-main);
+      margin-bottom: 6px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .ducto-legend .title:hover { color: var(--primary); }
+    .ducto-legend .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: var(--transition);
+      margin: 2px 0;
+    }
+    .ducto-legend .row:hover { background: #f1f5f9; }
+    .ducto-legend .row.active {
+      background: #e0f2fe;
+      box-shadow: inset 0 0 0 2px var(--secondary);
+    }
+    .ducto-legend .line { width: 18px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+    .ducto-legend .swatch { width: 18px; height: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .ducto-legend .swatch svg { width: 18px; height: 18px; }
+    .ducto-legend .reset-btn {
+      background: none; border: none; color: var(--text-muted); font-size: 10px;
+      cursor: pointer; padding: 0 4px; transition: var(--transition);
+    }
+    .ducto-legend .reset-btn:hover { color: #ef4444; }
+
+    .leaflet-popup-content { font-size: 0.85rem; font-family: 'Inter', sans-serif; margin: 12px; }
+    .cluster-popup-list { max-height: 200px; overflow-y: auto; padding-right: 4px; }
+    .cluster-popup-list .item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
+    .cluster-popup-list .item:last-child { border-bottom: none; }
+    .cluster-popup-list .item .name { color: var(--text-main); font-weight: 500; }
+    .cluster-popup-list .item .state { color: var(--text-muted); font-size: 0.7rem; background: #f8fafc; padding: 2px 6px; border-radius: 10px; }
+
+    @media (max-width: 768px) {
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .rail { width: 100%; max-height: 40vh; border-left: none; border-top: 1px solid var(--border); position: absolute; bottom: 0; z-index: 1000; box-shadow: 0 -4px 10px rgba(0,0,0,0.05); }
+      .rail.hidden { transform: translateY(100%); }
+      .toolbar .search { min-width: 100%; }
+      .toolbar { gap: 0.5rem; justify-content: space-between; }
+      .toolbar .filters select, .toolbar .btn { flex: 1; text-align: center; justify-content: center; }
+      .toolbar .separator { display: none; }
+      .ducto-legend { min-width: 90px; font-size: 9px; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <div class="brand"><i class="fas fa-gas-pump"></i> GNV · PetroIntelligence</div>
+    <div class="readouts">
+      <span class="readout"><span class="num" id="rTotal">0</span> estaciones</span>
+      <span class="readout"><span class="num" id="rGroups">0</span> redes</span>
+      <span class="readout"><span class="num" id="rMatch">0</span> en vista</span>
+      <span class="status-badge" id="stateStatus"><i class="fas fa-check-circle"></i> Datos cargados</span>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="search">
+      <i class="fas fa-search"></i>
+      <input type="text" id="searchInput" placeholder="Buscar estación…" aria-label="Buscar estación" />
+    </div>
+    <div class="filters">
+      <select id="groupFilter" aria-label="Filtrar por red"><option value="all">Todas las redes</option></select>
+    </div>
+    <div class="filters">
+      <select id="stateFilter" aria-label="Filtrar por estado"><option value="all">Todos los estados</option></select>
+    </div>
+    <!-- ===== FILTRO DE DUCTOS ===== -->
+    <div class="filters">
+      <select id="ductoFilter" aria-label="Filtrar ductos">
+        <option value="all">Todos los ductos</option>
+      </select>
+    </div>
+    <span class="separator"></span>
+    <!-- ===== BOTONES DE DUCTOS ===== -->
+    <button class="btn btn-secondary" id="toggleDuctosBtn" aria-label="Mostrar/ocultar ductos">
+      <i class="fas fa-eye" id="ductosToggleIcon"></i> <span id="ductosToggleLabel">Ocultar ductos</span>
+    </button>
+    <button class="btn btn-primary" id="centerDuctosBtn" aria-label="Centrar en todos los ductos">
+      <i class="fas fa-expand"></i> Centrar ductos
+    </button>
+    <!-- ============================ -->
+    <button class="btn btn-loc" id="locBtn" title="Centrar en mi ubicación" aria-label="Mi ubicación">
+      <span class="loc-icon"><i class="fas fa-location-crosshairs"></i></span>
+      <span class="spinner"><i class="fas fa-circle-notch"></i></span>
+      <span>Mi ubicación</span>
+    </button>
+    <button class="btn btn-toggle-rail" id="toggleRailBtn" title="Mostrar/ocultar directorio" aria-label="Directorio">
+      <i class="fas fa-chevron-right" id="railToggleIcon"></i> <span id="railToggleLabel">Directorio</span>
+    </button>
+    <button class="btn btn-clear-all hidden" id="clearAllBtn" title="Limpiar todos los filtros" aria-label="Limpiar filtros">
+      <i class="fas fa-times"></i> Limpiar filtros
+    </button>
+    <button class="btn btn-primary" id="resetBtn" aria-label="Vista total"><i class="fas fa-expand"></i> Vista total</button>
+  </div>
+  <div class="stage">
+    <div id="map"></div>
+    <div class="rail" id="railPanel">
+      <div class="rail-head"><span>Directorio</span><span id="listCnt" style="color: var(--primary);">0</span></div>
+      <ul class="rail-list" id="list"></ul>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<!-- Cargar ductos.js (debe estar en la misma carpeta) -->
+<script src="ductos.js"></script>
+
+<script>
+(function(){
+  "use strict";
+
+  // ============================================================
+  //  1. DATOS DE ESTACIONES GNV (incrustados)
+  // ============================================================
+  const rawData = [
+    { nombre: "Naturgy", lat: 25.683155, lon: -100.229638, precio: 11.19, grupo: "Naturgy", estado: "Nuevo León" },
+    { nombre: "Naturgy", lat: 25.683248, lon: -100.276902, precio: 11.19, grupo: "Naturgy", estado: "Nuevo León" },
+    { nombre: "Natgas", lat: 20.604389, lon: -100.417403, precio: 12.99, grupo: "Natgas", estado: "Querétaro" },
+    { nombre: "Energía Natural Móvil", lat: 31.732658, lon: -106.413785, precio: null, grupo: "Energía Natural Móvil", estado: "Chihuahua" },
+    { nombre: "Dina Camiones", lat: 19.763278, lon: -98.594518, precio: null, grupo: "Dina Camiones", estado: "Hidalgo" },
+    { nombre: "GNU 3eGas", lat: 19.7047816, lon: -101.244605, precio: null, grupo: "GNU", estado: "Michoacán" },
+    { nombre: "GNU Bluegas", lat: 19.4062275, lon: -101.244864, precio: null, grupo: "GNU", estado: "Michoacán" },
+    { nombre: "GNU Tototlan", lat: 20.5433325, lon: -102.78119, precio: null, grupo: "GNU", estado: "Jalisco" },
+    { nombre: "Natgas", lat: 20.622249, lon: -100.424422, precio: 12.99, grupo: "Natgas", estado: "Querétaro" },
+    { nombre: "Natgas", lat: 20.576745, lon: -100.414649, precio: 12.99, grupo: "Natgas", estado: "Querétaro" },
+    { nombre: "Gaseco", lat: 19.689157, lon: -101.239672, precio: 13.24, grupo: "Gaseco", estado: "Michoacán" },
+    { nombre: "Autotransportes Guadalajara", lat: 20.492279, lon: -103.222982, precio: null, grupo: "Autotransportes Guadalajara El Salto Puente Grande", estado: "Jalisco" },
+    { nombre: "Energía Natural Móvil", lat: 31.576934, lon: -106.450193, precio: null, grupo: "Energía Natural Móvil", estado: "Chihuahua" },
+    { nombre: "Natgas", lat: 20.549641, lon: -100.795065, precio: 12.99, grupo: "Natgas", estado: "Guanajuato" },
+    { nombre: "GMG", lat: 25.773262, lon: -100.380175, precio: null, grupo: "GMG", estado: "Nuevo León" },
+    { nombre: "Comsustenta", lat: 19.352768, lon: -98.962078, precio: 13.49, grupo: "Comsustenta", estado: "Estado de México" },
+    { nombre: "Energía Natural Móvil", lat: 31.678689, lon: -106.387449, precio: null, grupo: "Energía Natural Móvil", estado: "Chihuahua" },
+    { nombre: "GMC", lat: 25.693072, lon: -100.459559, precio: null, grupo: "GMC", estado: "Nuevo León" },
+    { nombre: "Natgas", lat: 21.83412, lon: -102.28907, precio: 12.99, grupo: "Natgas", estado: "Aguascalientes" },
+    { nombre: "AV ENERGÍA", lat: 20.61974, lon: -103.288929, precio: 13.49, grupo: "AV ENERGÍA", estado: "Jalisco" },
+    { nombre: "Enersi", lat: 20.638701, lon: -103.364298, precio: null, grupo: "Enersi", estado: "Jalisco" },
+    { nombre: "Corporación CH4", lat: 20.641018, lon: -105.294565, precio: null, grupo: "Corporación CH4", estado: "Jalisco" },
+    { nombre: "Ganacmex", lat: 20.76019, lon: -103.439913, precio: null, grupo: "Ganacmex", estado: "Jalisco" },
+    { nombre: "Energía Natural Móvil", lat: 20.911029, lon: -89.730206, precio: 13.50, grupo: "Energía Natural Móvil", estado: "Yucatán" },
+    { nombre: "Cugas", lat: 20.862414, lon: -100.426766, precio: 13.84, grupo: "Cugas", estado: "Querétaro" },
+    { nombre: "Consorcio Mexi-Gas", lat: 19.555678, lon: -99.203703, precio: null, grupo: "Consorcio Mexi-Gas", estado: "Estado de México" },
+    { nombre: "Natgas", lat: 20.634538, lon: -103.33984, precio: 11.99, grupo: "Natgas", estado: "Jalisco" },
+    { nombre: "Virtual Pipeles de México", lat: 18.005755, lon: -94.562143, precio: null, grupo: "Virtual Pipeles de México", estado: "Veracruz" },
+    { nombre: "Planta GN Monterrey I", lat: 25.955305, lon: -100.216503, precio: null, grupo: "Planta GN Monterrey I", estado: "Nuevo León" },
+    { nombre: "Energy Plus", lat: 25.77486, lon: -100.181866, precio: null, grupo: "Energy Plus", estado: "Nuevo León" },
+    { nombre: "Distasermrex", lat: 19.645741, lon: -99.182501, precio: null, grupo: "Distasermrex", estado: "Estado de México" },
+    { nombre: "GNU ENBI", lat: 19.712049, lon: -101.167788, precio: null, grupo: "GNU", estado: "Michoacán" },
+    { nombre: "Natgas", lat: 21.909621, lon: -102.291032, precio: 12.99, grupo: "Natgas", estado: "Aguascalientes" },
+    { nombre: "Comerzializadora GS3", lat: 20.710405, lon: -103.412035, precio: null, grupo: "Comerzializadora GS3", estado: "Jalisco" },
+    { nombre: "Distasermrex", lat: 19.645739, lon: -99.19881, precio: null, grupo: "Distasermrex", estado: "Estado de México" },
+    { nombre: "Natgas", lat: 20.617326, lon: -100.451549, precio: 12.99, grupo: "Natgas", estado: "Querétaro" },
+    { nombre: "Natgas", lat: 21.168757, lon: -101.654437, precio: 12.99, grupo: "Natgas", estado: "Guanajuato" },
+    { nombre: "Energía Natural Móvil", lat: 30.410311, lon: -107.910942, precio: null, grupo: "Energía Natural Móvil", estado: "Chihuahua" },
+    { nombre: "Cimagas", lat: 22.074422, lon: -100.898999, precio: null, grupo: "Cimagas", estado: "San Luis Potosí" },
+    { nombre: "Natgas", lat: 20.655161, lon: -103.376531, precio: 11.99, grupo: "Natgas", estado: "Jalisco" },
+    { nombre: "Simba gas", lat: 20.734642, lon: -103.312803, precio: null, grupo: "Simba gas", estado: "Jalisco" },
+    { nombre: "Natgas", lat: 20.69552, lon: -100.436167, precio: 12.99, grupo: "Natgas", estado: "Querétaro" },
+    { nombre: "Acessgas", lat: 32.453244, lon: -116.870404, precio: null, grupo: "Acessgas", estado: "Baja California" },
+    { nombre: "Ganamex", lat: 25.936797, lon: -100.213827, precio: 10.99, grupo: "Ganamex", estado: "Nuevo León" },
+    { nombre: "Natgas", lat: 21.133887, lon: -101.677618, precio: 12.99, grupo: "Natgas", estado: "Guanajuato" },
+    { nombre: "Comsustenta", lat: 19.617328, lon: -98.984261, precio: 13.49, grupo: "Comsustenta", estado: "Estado de México" },
+    { nombre: "Comsustenta", lat: 19.654279, lon: -99.076397, precio: 13.49, grupo: "Comsustenta", estado: "Estado de México" },
+    { nombre: "VBG Energética", lat: 19.298268, lon: -99.627617, precio: null, grupo: "VBG Energética", estado: "Estado de México" },
+    { nombre: "Enco GNV", lat: 19.382222, lon: -99.197662, precio: 10.99, grupo: "Enco GNV", estado: "Ciudad de México" },
+    { nombre: "Enco GNV", lat: 19.463453, lon: -99.215505, precio: 10.99, grupo: "Enco GNV", estado: "Estado de México" },
+    { nombre: "Enco GNV", lat: 19.378235, lon: -99.081887, precio: 10.99, grupo: "Enco GNV", estado: "Ciudad de México" },
+    { nombre: "Enco GNV", lat: 19.626289, lon: -99.147097, precio: 10.99, grupo: "Enco GNV", estado: "Estado de México" },
+    { nombre: "Natgas", lat: 22.120255, lon: -100.911314, precio: 12.99, grupo: "Natgas", estado: "San Luis Potosí" },
+    { nombre: "Virtual Pipeles de México", lat: 16.751436, lon: -93.14725, precio: null, grupo: "Virtual Pipeles de México", estado: "Chiapas" },
+    { nombre: "Eco Gas Natural", lat: 19.074515, lon: -98.206564, precio: null, grupo: "Eco Gas Natural Vehicular", estado: "Puebla" },
+    { nombre: "Natgas", lat: 25.706343, lon: -100.284447, precio: 12.99, grupo: "Natgas", estado: "Nuevo León" },
+    { nombre: "Operadora Vivebús", lat: 28.630005, lon: -106.030951, precio: 12.80, grupo: "Operadora de Transporte Vivebús Chihuahua", estado: "Chihuahua" },
+    { nombre: "Natgas", lat: 21.870567, lon: -102.318267, precio: 12.99, grupo: "Natgas", estado: "Aguascalientes" },
+    { nombre: "Energía Natural Móvil", lat: 31.733631, lon: -106.478147, precio: null, grupo: "Energía Natural Móvil", estado: "Chihuahua" },
+    { nombre: "Natgas", lat: 25.718037, lon: -100.355696, precio: 12.99, grupo: "Natgas", estado: "Nuevo León" },
+    { nombre: "Natgas", lat: 25.684298, lon: -100.300454, precio: 12.99, grupo: "Natgas", estado: "Nuevo León" },
+    { nombre: "Energía Responsable", lat: 25.495547, lon: -100.968662, precio: null, grupo: "Energía Responsable de México", estado: "Coahuila" },
+    { nombre: "Comsustenta", lat: 25.456395, lon: -101.000346, precio: 12.99, grupo: "Comsustenta", estado: "Coahuila" },
+    { nombre: "Natgas", lat: 21.944266, lon: -102.289803, precio: 11.49, grupo: "Natgas", estado: "Aguascalientes" },
+    { nombre: "Enco GNV", lat: 19.424893, lon: -99.11751, precio: 10.99, grupo: "Enco GNV", estado: "Ciudad de México" },
+    { nombre: "Enco GNV", lat: 19.46598, lon: -99.218062, precio: 10.99, grupo: "Enco GNV", estado: "Estado de México" },
+    { nombre: "Enco GNV", lat: 20.584931, lon: -103.353264, precio: 10.99, grupo: "Enco GNV", estado: "Jalisco" },
+    { nombre: "Enco GNV", lat: 25.728784, lon: -100.331739, precio: 10.99, grupo: "Enco GNV", estado: "Nuevo León" },
+    { nombre: "Enco GNV", lat: 25.770489, lon: -100.42076, precio: 10.99, grupo: "Enco GNV", estado: "Nuevo León" },
+    { nombre: "Enco GNV", lat: 25.704485, lon: -100.158078, precio: 10.99, grupo: "Enco GNV", estado: "Nuevo León" },
+    { nombre: "Enco GNV", lat: 19.073806, lon: -98.171345, precio: 10.99, grupo: "Enco GNV", estado: "Puebla" },
+    { nombre: "Infra GNV", lat: 19.461368, lon: -99.213384, precio: null, grupo: "Infra GNV", estado: "Estado de México" },
+    { nombre: "Enco GNV", lat: 20.646074, lon: -103.35853, precio: null, grupo: "Enco GNV", estado: "Jalisco" },
+    { nombre: "Igasamex", lat: 20.563563, lon: -100.288262, precio: null, grupo: "Igasamex", estado: "Querétaro" },
+    { nombre: "Gaseco", lat: 19.413452, lon: -98.158614, precio: 13.24, grupo: "Gaseco", estado: "Tlaxcala" },
+    { nombre: "Aakigas", lat: 29.062268, lon: -110.966247, precio: 11.99, grupo: "Aakigas", estado: "Sonora" },
+    { nombre: "Natgas", lat: 19.599874, lon: -99.018866, precio: 11.99, grupo: "Natgas", estado: "Estado de México" },
+    { nombre: "Natgas", lat: 20.740559, lon: -103.398715, precio: 11.99, grupo: "Natgas", estado: "Jalisco" },
+    { nombre: "Natgas", lat: 19.53371, lon: -99.180936, precio: 11.99, grupo: "Natgas", estado: "Estado de México" },
+    { nombre: "Natgas", lat: 20.532147, lon: -100.444243, precio: 12.99, grupo: "Natgas", estado: "Querétaro" },
+    { nombre: "Energia Ambiental", lat: 22.11266, lon: -101.096156, precio: null, grupo: "Energia Ambiental Vehicular", estado: "San Luis Potosí" },
+    { nombre: "Minera Penmont", lat: 30.714935, lon: -112.196582, precio: null, grupo: "Minera Penmont", estado: "Sonora" },
+    { nombre: "Energía y Servicios", lat: 19.261658, lon: -98.892782, precio: null, grupo: "Energía y Servicios Coordinados", estado: "Estado de México" },
+    { nombre: "Gaseco", lat: 19.700399, lon: -101.154679, precio: 13.24, grupo: "Gaseco", estado: "Michoacán" },
+    { nombre: "Gaseco", lat: 19.143246, lon: -96.145874, precio: 13.24, grupo: "Gaseco", estado: "Veracruz" },
+    { nombre: "Comsustenta", lat: 19.55506, lon: -99.197545, precio: 13.49, grupo: "Comsustenta", estado: "Estado de México" },
+    { nombre: "Natgas", lat: 20.607742, lon: -103.405459, precio: 11.99, grupo: "Natgas", estado: "Jalisco" },
+    { nombre: "Comsustenta", lat: 17.988175, lon: -92.985293, precio: 13.99, grupo: "Comsustenta", estado: "Tabasco" },
+    { nombre: "Comsustenta", lat: 22.133507, lon: -100.959596, precio: 13.99, grupo: "Comsustenta", estado: "San Luis Potosí" },
+    { nombre: "Talleres Mty", lat: 22.112978, lon: -101.096158, precio: null, grupo: "Talleres y Refacciones Monterrey", estado: "San Luis Potosí" },
+    { nombre: "Enco GNV", lat: 20.617348, lon: -103.279843, precio: null, grupo: "Enco GNV", estado: "Jalisco" },
+    { nombre: "Comsustenta", lat: 25.548752, lon: -103.471957, precio: 13.99, grupo: "Comsustenta", estado: "Coahuila" },
+    { nombre: "13 GAS", lat: 19.572007, lon: -99.107746, precio: null, grupo: "13 GAS", estado: "Estado de México" },
+    { nombre: "Eco Gas Natural", lat: 19.040319, lon: -98.333054, precio: null, grupo: "Eco Gas Natural Vehicular", estado: "Puebla" },
+    { nombre: "Talleres Mty", lat: 25.959331, lon: -100.18703, precio: null, grupo: "Talleres y Refacciones Monterrey", estado: "Nuevo León" },
+    { nombre: "Súper Servicio El Paraíso", lat: 22.155145, lon: -100.909769, precio: null, grupo: "Súper Servicio El Paraíso", estado: "San Luis Potosí" },
+    { nombre: "Energía y Servicios", lat: 29.085316, lon: -110.975138, precio: null, grupo: "Energía y Servicios Coordinados", estado: "Sonora" },
+    { nombre: "Energía y Servicios", lat: 25.585062, lon: -103.562093, precio: null, grupo: "Energía y Servicios Coordinados", estado: "Durango" },
+    { nombre: "Baja Gas and Oil Natural", lat: 32.342136, lon: -117.120515, precio: null, grupo: "Baja Gas and Oil Natural", estado: "Baja California" },
+    { nombre: "Energía y Servicios", lat: 19.703798, lon: -101.288527, precio: null, grupo: "Energía y Servicios Coordinados", estado: "Michoacán" },
+    { nombre: "Energía y Servicios", lat: 25.548746, lon: -103.484319, precio: null, grupo: "Energía y Servicios Coordinados", estado: "Coahuila" },
+    { nombre: "Energía y Servicios", lat: 20.528692, lon: -100.898559, precio: null, grupo: "Energía y Servicios Coordinados", estado: "Guanajuato" },
+    { nombre: "Metropolitana GNV", lat: 19.668537, lon: -99.207383, precio: null, grupo: "Metropolitana de Gas Natural Vehicular y Carga Eléctrica", estado: "Estado de México" },
+    { nombre: "Gaseco", lat: 20.967219, lon: -89.69118, precio: null, grupo: "Gaseco", estado: "Yucatán" },
+    { nombre: "Ecogas Móvil", lat: 28.688054, lon: -106.151774, precio: null, grupo: "Ecogas Móvil", estado: "Chihuahua" },
+    { nombre: "Fenosa", lat: 25.685706, lon: -100.199999, precio: null, grupo: "Fenosa", estado: "Nuevo León" },
+    { nombre: "Virtual Pipeles", lat: 20.97922, lon: -89.661295, precio: null, grupo: "Virtual Pipeles de México", estado: "Yucatán" },
+    { nombre: "BOREALGAS", lat: 20.707272, lon: -103.465062, precio: 11.14, grupo: "BOREALGAS", estado: "Jalisco" },
+    { nombre: "GNL Cosalá", lat: 23.245403, lon: -106.435187, precio: null, grupo: "GNL Cosalá", estado: "Sinaloa" },
+    { nombre: "Super Servicio Mezcom", lat: 20.671676, lon: -101.377047, precio: null, grupo: "Super Servicio Mezcom", estado: "Guanajuato" },
+    { nombre: "LANDSEGEN", lat: 19.363834, lon: -98.987503, precio: null, grupo: "LANDSEGEN", estado: "Estado de México" },
+    { nombre: "Gasnat Peninsular", lat: 20.971012, lon: -89.689731, precio: 14.49, grupo: "Gasnat Peninsular (OPTAGAS Natural)", estado: "Yucatán" },
+    { nombre: "Grupo Natenergy", lat: 20.614885, lon: -100.505399, precio: null, grupo: "Grupo Natenergy Hidrocarburos de México", estado: "Querétaro" },
+    { nombre: "Desarrolladora Prose", lat: 19.407006, lon: -99.310587, precio: null, grupo: "Desarrolladora de Transporte-Prose", estado: "Estado de México" },
+    { nombre: "Corporación CH4", lat: 25.799943, lon: -100.625769, precio: null, grupo: "Corporación CH4", estado: "Nuevo León" },
+    { nombre: "North Gas", lat: 32.604884, lon: -115.418889, precio: null, grupo: "North Gas", estado: "Baja California" },
+    { nombre: "ERG Multi Energéticos", lat: 25.849304, lon: -100.293718, precio: null, grupo: "ERG Multi Energéticos", estado: "Nuevo León" },
+    { nombre: "Natgas", lat: 25.764335, lon: -100.29341, precio: null, grupo: "Natgas", estado: "Nuevo León" },
+    { nombre: "Natgas", lat: 25.830632, lon: -100.25582, precio: null, grupo: "Natgas", estado: "Nuevo León" },
+    { nombre: "Gas Ecológicos", lat: 25.689853, lon: -100.321637, precio: null, grupo: "Gas e Hidrocarburos Ecológicos", estado: "Nuevo León" },
+    { nombre: "Natgas", lat: 21.880825, lon: -102.257955, precio: null, grupo: "Natgas", estado: "Aguascalientes" },
+    { nombre: "Combustibles Mex", lat: 19.515798, lon: -99.213465, precio: null, grupo: "Combustibles Ecológicos Mexicanos", estado: "Estado de México" },
+    { nombre: "Combustibles Mex", lat: 19.034592, lon: -98.183968, precio: null, grupo: "Combustibles Ecológicos Mexicanos", estado: "Puebla" },
+    { nombre: "Wigas", lat: 19.471889, lon: -99.224549, precio: null, grupo: "Wigas World International Gas Station", estado: "Estado de México" },
+    { nombre: "Natgas", lat: 25.684311, lon: -100.300555, precio: null, grupo: "Natgas", estado: "Nuevo León" },
+    { nombre: "Natgas", lat: 21.168818, lon: -101.654511, precio: null, grupo: "Natgas", estado: "Guanajuato" },
+    { nombre: "Energia Ambiental", lat: 22.157293, lon: -100.95695, precio: null, grupo: "Energia Ambiental Vehicular", estado: "San Luis Potosí" },
+    { nombre: "DHGN1", lat: 25.737843, lon: -100.342697, precio: null, grupo: "DHGN1", estado: "Nuevo León" },
+    { nombre: "COMEXIGAL", lat: 25.792374, lon: -100.330338, precio: null, grupo: "COMEXIGAL", estado: "Nuevo León" },
+    { nombre: "Natgas", lat: 20.6951, lon: -100.436103, precio: 13.99, grupo: "Natgas", estado: "Querétaro" },
+    { nombre: "Natgas", lat: 20.57184, lon: -100.265563, precio: 13.99, grupo: "Natgas", estado: "Querétaro" },
+    { nombre: "Natgas", lat: 20.419582, lon: -99.979725, precio: 13.99, grupo: "Natgas", estado: "Estado de México" },
+    { nombre: "Energía y Servicios", lat: 19.549036, lon: -99.209562, precio: null, grupo: "Energía y Servicios Coordinados", estado: "Estado de México" },
+    { nombre: "ENVICORP", lat: 25.676757, lon: -100.278984, precio: null, grupo: "ENVICORP", estado: "Nuevo León" },
+    { nombre: "Energía y Servicios", lat: 18.896193, lon: -99.2241, precio: null, grupo: "Energía y Servicios Coordinados", estado: "Morelos" },
+    { nombre: "Gas Ecológicos", lat: 25.685907, lon: -100.513555, precio: null, grupo: "Gas e Hidrocarburos Ecológicos", estado: "Nuevo León" },
+    { nombre: "Energía y Servicios", lat: 19.410517, lon: -98.925741, precio: null, grupo: "Energía y Servicios Coordinados", estado: "Estado de México" },
+    { nombre: "Energía y Servicios", lat: 22.407958, lon: -97.960125, precio: null, grupo: "Energía y Servicios Coordinados", estado: "Tamaulipas" },
+    { nombre: "Transport and Logistic", lat: 21.885185, lon: -102.294202, precio: null, grupo: "Transport and Logistic", estado: "Aguascalientes" },
+    { nombre: "Corporación CH4", lat: 20.687826, lon: -103.45009, precio: null, grupo: "Corporación CH4", estado: "Jalisco" },
+    { nombre: "LANDGAS", lat: 19.645741, lon: -99.183126, precio: null, grupo: "LANDGAS", estado: "Estado de México" },
+    { nombre: "ERG Multi Energéticos", lat: 22.454488, lon: -100.699041, precio: null, grupo: "ERG Multi Energéticos", estado: "San Luis Potosí" },
+    { nombre: "Corporación CH4", lat: 25.811037, lon: -100.423641, precio: null, grupo: "Corporación CH4", estado: "Nuevo León" },
+    { nombre: "Pemex GNV", lat: 22.188527, lon: -97.823, precio: null, grupo: "Nuevas", estado: "Tamaulipas" },
+    { nombre: "Gas Natural Pánuco", lat: 22.264951, lon: -97.87754, precio: null, grupo: "Nuevas", estado: "Tamaulipas" },
+    { nombre: "Geoteco Oil", lat: 22.277024, lon: -97.87342, precio: null, grupo: "Nuevas", estado: "Tamaulipas" },
+    { nombre: "Tractebel GNP", lat: 22.293226, lon: -97.87136, precio: null, grupo: "Nuevas", estado: "Tamaulipas" },
+    { nombre: "CPG Arenque", lat: 22.290208, lon: -97.813425, precio: null, grupo: "Nuevas", estado: "Tamaulipas" },
+    { nombre: "Planta ULSG", lat: 22.272417, lon: -97.809648, precio: null, grupo: "Nuevas", estado: "Tamaulipas" },
+    { nombre: "ESTACION GNV", lat: 25.928407, lon: -108.90747, precio: null, grupo: "Nuevas", estado: "Sinaloa" },
+    { nombre: "Gas Natural Fenosa", lat: 25.035838, lon: -107.435302, precio: null, grupo: "Nuevas", estado: "Sinaloa" },
+    { nombre: "Fuerza Energía Norte Durango S.A de C.V., Global Power Generation", lat: 24.2789240035213, lon: -104.490073963509, precio: null, grupo: "Fuerza Energía Norte Durango S.A de C.V., Global Power Generation", estado: "Durango" },
+    { nombre: "Gas Natural Comprimido Estacion Madre Dgo", lat: 24.1461608393584, lon: -104.572471423685, precio: null, grupo: "Gas Natural Comprimido Estacion Madre Dgo", estado: "Durango" },
+    { nombre: "Eco Gas El Gas Natural", lat: 24.1210956873854, lon: -104.594444079731, precio: null, grupo: "Eco Gas El Gas Natural", estado: "Durango" },
+    { nombre: "Mi Gas Natural", lat: 24.0504684883449, lon: -104.640154189998, precio: null, grupo: "Mi Gas Natural", estado: "Sonora" },
+    { nombre: "MLV 14006", lat: 30.1759989576625, lon: -112.348938011243, precio: null, grupo: "MLV 14006", estado: "Sonora" },
+    { nombre: "Natgas", lat: 21.9441788361663, lon: -102.0392508, precio: null, grupo: "Natgas", estado: "Aguascalientes" },
+    { nombre: "Natgas", lat: 21.94411333, lon: -103.464403918895, precio: null, grupo: "Natgas", estado: "Jalisco" },
+    { nombre: "NATGAS", lat: 21.8340804, lon: -100.3303603, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 21.8704983, lon: -100.3430701, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 21.8805755, lon: -103.2798485, precio: null, grupo: "NATGAS", estado: "Jalisco" },
+    { nombre: "Estación de Carburación, Central de Gas", lat: 21.8681074894284, lon: -102.23633712462, precio: null, grupo: "Estación de Carburación, Central de Gas", estado: "Aguascalientes" },
+    { nombre: "Euro Gas Conversiones de Vehículos a Gas Natural", lat: 21.8770285292431, lon: -102.254704891784, precio: null, grupo: "Euro Gas Conversiones de Vehículos a Gas Natural", estado: "Aguascalientes" },
+    { nombre: "Gas Natural Del Noroeste", lat: 21.798631768338, lon: -102.263116299177, precio: null, grupo: "Gas Natural Del Noroeste", estado: "Aguascalientes" },
+    { nombre: "NATGAS", lat: 21.9095446, lon: -99.0818823, precio: null, grupo: "NATGAS", estado: "San Luis Potosí" },
+    { nombre: "GNV Estación de Servicio de Gas Natural DICNA", lat: 32.6051426904268, lon: -115.418745812831, precio: null, grupo: "GNV Estación de Servicio de Gas Natural DICNA", estado: "Baja California" },
+    { nombre: "INDUGAS", lat: 32.4661553204067, lon: -116.877842451862, precio: null, grupo: "INDUGAS", estado: "Baja California" },
+    { nombre: "Baja Gas & Oil", lat: 32.6492256142499, lon: -115.469042499453, precio: null, grupo: "Baja Gas & Oil", estado: "Baja California" },
+    { nombre: "Baja Gas Natural GNV Rosarito", lat: 32.4008348279281, lon: -117.034606936425, precio: null, grupo: "Baja Gas Natural GNV Rosarito", estado: "Baja California" },
+    { nombre: "BAJA GAS NATURAL", lat: 32.5387094766436, lon: -116.990661626478, precio: null, grupo: "BAJA GAS NATURAL", estado: "Baja California" },
+    { nombre: "Natgas Laredo y Libramiento", lat: 25.8307123579475, lon: -103.35325, precio: null, grupo: "Natgas Laredo y Libramiento", estado: "Chihuahua" },
+    { nombre: "EcoGas Mexicali", lat: 32.6379316347941, lon: -115.447393969029, precio: null, grupo: "EcoGas Mexicali", estado: "Baja California" },
+    { nombre: "EcoGas", lat: 32.6210893602657, lon: -115.406023577566, precio: null, grupo: "EcoGas", estado: "Baja California" },
+    { nombre: "ENCO GAS", lat: 19.37814, lon: -99.2181718, precio: null, grupo: "ENCO GAS", estado: "CDMX" },
+    { nombre: "ENCOGAS", lat: 19.4250857, lon: -100.1820093, precio: null, grupo: "ENCOGAS", estado: "México" },
+    { nombre: "INFRA GAS", lat: 19.460123, lon: -100.4209317, precio: null, grupo: "INFRA GAS", estado: "México" },
+    { nombre: "Naturgy Ciudad Judicial", lat: 19.4552140151701, lon: -100.2298365, precio: null, grupo: "Naturgy Ciudad Judicial", estado: "México" },
+    { nombre: "Naturgy", lat: 19.4643700086494, lon: -99.1850022196241, precio: null, grupo: "Naturgy", estado: "CDMX" },
+    { nombre: "Naturgy", lat: 19.4585432774707, lon: -99.1843155741226, precio: null, grupo: "Naturgy", estado: "CDMX" },
+    { nombre: "Naturgy", lat: 19.3769470822641, lon: -99.1692093730904, precio: null, grupo: "Naturgy", estado: "CDMX" },
+    { nombre: "Naturgy CDMX Vallejo", lat: 19.4630369031072, lon: -100.2000542, precio: null, grupo: "Naturgy CDMX Vallejo", estado: "México" },
+    { nombre: "GAZO SISTEMAS A GAS VEHICULAR", lat: 19.448866906814, lon: -99.7491845032419, precio: null, grupo: "GAZO SISTEMAS A GAS VEHICULAR", estado: "México" },
+    { nombre: "GAZO SISTEMAS A GAS VEHICULAR", lat: 19.4457648703244, lon: -98.2709633, precio: null, grupo: "GAZO SISTEMAS A GAS VEHICULAR", estado: "Puebla" },
+    { nombre: "CO GAS NATURAL", lat: 19.3724500330274, lon: -99.2896270766177, precio: null, grupo: "CO GAS NATURAL", estado: "CDMX" },
+    { nombre: "Gas natural", lat: 19.3241840879269, lon: -99.2377853412573, precio: null, grupo: "Gas natural", estado: "CDMX" },
+    { nombre: "BULGAS - MAJIGAS", lat: 19.3718022626216, lon: -99.0791702285462, precio: null, grupo: "BULGAS - MAJIGAS", estado: "CDMX" },
+    { nombre: "Comsustenta Los Reyes la Paz", lat: 19.3594941350019, lon: -98.9617538475517, precio: null, grupo: "Comsustenta Los Reyes la Paz", estado: "CDMX" },
+    { nombre: "ENCO GNV BALBUENA", lat: 19.4323576561676, lon: -99.1159057632269, precio: null, grupo: "ENCO GNV BALBUENA", estado: "CDMX" },
+    { nombre: "Gas Natural Del Noroeste", lat: 19.4679679366106, lon: -99.2247390752087, precio: null, grupo: "Gas Natural Del Noroeste", estado: "CDMX" },
+    { nombre: "Gas Natural Vehicular INFRA", lat: 19.4686153240797, lon: -99.2144393923534, precio: null, grupo: "Gas Natural Vehicular INFRA", estado: "CDMX" },
+    { nombre: "Mi Gas Natural", lat: 19.5286215214427, lon: -99.24275548523, precio: null, grupo: "Mi Gas Natural", estado: "CDMX" },
+    { nombre: "ENA", lat: 31.6788052, lon: -106.4781303, precio: null, grupo: "ENA", estado: "Chihuahua" },
+    { nombre: "ENA", lat: 31.7329117, lon: -106.45013831031, precio: null, grupo: "ENA", estado: "Chihuahua" },
+    { nombre: "ECOGAS Chihuahua", lat: 28.7786485773251, lon: -100.910009823491, precio: null, grupo: "ECOGAS Chihuahua", estado: "Coahuila" },
+    { nombre: "OPERADORA DE TRANSPORTE VIVEBUS S.A. DE C.V.", lat: 28.6266392019864, lon: -100.9570954, precio: null, grupo: "OPERADORA DE TRANSPORTE VIVEBUS S.A. DE C.V.", estado: "Coahuila" },
+    { nombre: "Gasera k-19", lat: 28.7932241620926, lon: -106.149858671215, precio: null, grupo: "Gasera k-19", estado: "Chihuahua" },
+    { nombre: "SuperGas Gasera", lat: 28.7565108814214, lon: -106.130289274423, precio: null, grupo: "SuperGas Gasera", estado: "Chihuahua" },
+    { nombre: "Super Gas", lat: 28.6743106269665, lon: -106.118272978148, precio: null, grupo: "Super Gas", estado: "Chihuahua" },
+    { nombre: "ZETA GAS CHIHUAHUA CENTRAL", lat: 28.6806360165721, lon: -106.101106840611, precio: null, grupo: "ZETA GAS CHIHUAHUA CENTRAL", estado: "Chihuahua" },
+    { nombre: "ECOGAS Chihuahua", lat: 28.6367269283444, lon: -106.125826078935, precio: null, grupo: "ECOGAS Chihuahua", estado: "Chihuahua" },
+    { nombre: "Hidrogas De Chihuahua, S.A. De C.V.", lat: 28.6255772696852, lon: -106.049093444147, precio: null, grupo: "Hidrogas De Chihuahua, S.A. De C.V.", estado: "Chihuahua" },
+    { nombre: "Supergas", lat: 28.6892951558466, lon: -106.015104491348, precio: null, grupo: "Supergas", estado: "Chihuahua" },
+    { nombre: "Gasificadora Real", lat: 26.8680482775046, lon: -101.427347401734, precio: null, grupo: "Gasificadora Real", estado: "Coahuila" },
+    { nombre: "SUPER GAS", lat: 28.6666072238769, lon: -100.553918972539, precio: null, grupo: "SUPER GAS", estado: "Coahuila" },
+    { nombre: "Rino Energy", lat: 25.4569325, lon: -102.29039440533, precio: null, grupo: "Rino Energy", estado: "Coahuila" },
+    { nombre: "Naturgy Saltillo", lat: 25.4666210494368, lon: -98.1589901765575, precio: null, grupo: "Naturgy Saltillo", estado: "Nuevo León" },
+    { nombre: "'Gas Natural Toluca - Servicios Industriales y Comerciales'", lat: 19.3027191608389, lon: -99.58805891455, precio: null, grupo: "'Gas Natural Toluca - Servicios Industriales y Comerciales'", estado: "México" },
+    { nombre: "Tlalnepantla Comsustenta", lat: 19.5675543834824, lon: -99.1980442687732, precio: null, grupo: "Tlalnepantla Comsustenta", estado: "CDMX" },
+    { nombre: "ENCO GNV", lat: 19.6264915, lon: -89.6895951, precio: null, grupo: "ENCO GNV", estado: "Campeche" },
+    { nombre: "ENCOGAS", lat: 19.4661248, lon: -103.2227533, precio: null, grupo: "ENCOGAS", estado: "Jalisco" },
+    { nombre: "ESTACIÓN ITER GAS ZINACATEPEC", lat: 19.3004715922271, lon: -98.962126, precio: null, grupo: "ESTACIÓN ITER GAS ZINACATEPEC", estado: "CDMX" },
+    { nombre: "Comsustenta Los Reyes la Paz", lat: 19.3528225, lon: -99.2139329, precio: null, grupo: "Comsustenta Los Reyes la Paz", estado: "CDMX" },
+    { nombre: "ENCO GNV TULE", lat: 19.515955, lon: -99.1976181, precio: null, grupo: "ENCO GNV TULE", estado: "CDMX" },
+    { nombre: "Gas natural GYM (ComSustenta)", lat: 19.5553085, lon: -99.0715379881958, precio: null, grupo: "Gas natural GYM (ComSustenta)", estado: "CDMX" },
+    { nombre: "Wigas Ecatepec 'Xalostoc'", lat: 19.5319631566705, lon: -99.0762474, precio: null, grupo: "Wigas Ecatepec 'Xalostoc'", estado: "CDMX" },
+    { nombre: "Comsustenta Coacalco", lat: 19.6545515, lon: -102.2900373, precio: null, grupo: "Comsustenta Coacalco", estado: "Jalisco" },
+    { nombre: "Iter Gas Natural Toluca", lat: 19.2987509493841, lon: -99.6274581043736, precio: null, grupo: "Iter Gas Natural Toluca", estado: "CDMX" },
+    { nombre: "GAZEL", lat: 19.463358, lon: -98.1841709882043, precio: null, grupo: "GAZEL", estado: "Puebla" },
+    { nombre: "NATGAS", lat: 19.5337897, lon: -103.440101, precio: null, grupo: "NATGAS", estado: "Jalisco" },
+    { nombre: "NATGAS", lat: 19.6161325, lon: -100.9109232, precio: null, grupo: "NATGAS", estado: "Michoacán" },
+    { nombre: "WIGAS", lat: 19.4724153, lon: -99.6274763, precio: null, grupo: "WIGAS", estado: "México" },
+    { nombre: "WIGAS", lat: 19.6175335, lon: -100.2139402, precio: null, grupo: "WIGAS", estado: "México" },
+    { nombre: "Naturgy", lat: 19.4740690057102, lon: -96.145906450863, precio: null, grupo: "Naturgy", estado: "Puebla" },
+    { nombre: "Gazo Tlalnepantla", lat: 19.5540457781586, lon: -99.2154696, precio: null, grupo: "Gazo Tlalnepantla", estado: "CDMX" },
+    { nombre: "ISC Edomex", lat: 19.5341386373795, lon: -100.3216922, precio: null, grupo: "ISC Edomex", estado: "México" },
+    { nombre: "Naturgy Toluca Oriente", lat: 19.2541023460195, lon: -101.2446994, precio: null, grupo: "Naturgy Toluca Oriente", estado: "Michoacán" },
+    { nombre: "GAS NATURAL POTOSINO-PARQUE OPCIÓN", lat: 21.0511278730627, lon: -100.488202491544, precio: null, grupo: "GAS NATURAL POTOSINO-PARQUE OPCIÓN", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 21.1876409572249, lon: -101.654397904591, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 21.1479414020564, lon: -101.680490433646, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 21.119761066257, lon: -101.673623978632, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "Igasamex San José Iturbide S. de R.L. de C.V.", lat: 20.9944534302041, lon: -100.434644374643, precio: null, grupo: "Igasamex San José Iturbide S. de R.L. de C.V.", estado: "Guanajuato" },
+    { nombre: "GAS NATURAL DE SANTA ROSA", lat: 20.8328184369229, lon: -100.451123866678, precio: null, grupo: "GAS NATURAL DE SANTA ROSA", estado: "Guanajuato" },
+    { nombre: "CUGAS Compresión", lat: 20.8777345165113, lon: -100.432584438139, precio: null, grupo: "CUGAS Compresión", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 20.5494605, lon: -100.9596259, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "Natgas Celaya", lat: 20.5495973886819, lon: -100.2554379, precio: null, grupo: "Natgas Celaya", estado: "Guanajuato" },
+    { nombre: "BIO GNV León", lat: 21.1741498300426, lon: -100.2933201, precio: null, grupo: "BIO GNV León", estado: "Guanajuato" },
+    { nombre: "BOREALGAS Central Zapopan", lat: 20.7135227719052, lon: -100.3561427, precio: null, grupo: "BOREALGAS Central Zapopan", estado: "Guanajuato" },
+    { nombre: "ENCO GAS", lat: 20.6174663, lon: -100.2843192, precio: null, grupo: "ENCO GAS", estado: "Guanajuato" },
+    { nombre: "ENCO GNV", lat: 20.5848446, lon: -100.300347, precio: null, grupo: "ENCO GNV", estado: "Guanajuato" },
+    { nombre: "ENERGÍAS LIMPIAS VALANT", lat: 20.4923844, lon: -100.8503553, precio: null, grupo: "ENERGÍAS LIMPIAS VALANT", estado: "Guanajuato" },
+    { nombre: "Ganacmex", lat: 20.7598573, lon: -102.2894061, precio: null, grupo: "Ganacmex", estado: "Jalisco" },
+    { nombre: "BOREALGAS Central Zapopan | Gas Natural Vehicular", lat: 20.7186449962829, lon: -103.457473077065, precio: null, grupo: "BOREALGAS Central Zapopan | Gas Natural Vehicular", estado: "Jalisco" },
+    { nombre: "NATGAS", lat: 20.665972215646, lon: -103.378508843756, precio: null, grupo: "NATGAS", estado: "Jalisco" },
+    { nombre: "Boreal Gas", lat: 20.6202020240734, lon: -100.4519167, precio: null, grupo: "Boreal Gas", estado: "Guanajuato" },
+    { nombre: "ENCO GNV SAN PEDRO", lat: 20.5850415641891, lon: -100.4241565, precio: null, grupo: "ENCO GNV SAN PEDRO", estado: "Guanajuato" },
+    { nombre: "CH4 El Salto", lat: 20.5072512575658, lon: -103.222628974686, precio: null, grupo: "CH4 El Salto", estado: "Jalisco" },
+    { nombre: "ENCO GNV SAN PEDRO", lat: 20.5882910606513, lon: -100.4171025, precio: null, grupo: "ENCO GNV SAN PEDRO", estado: "Guanajuato" },
+    { nombre: "ENCO GNV GOLDEN", lat: 20.650970091239, lon: -100.4171025, precio: null, grupo: "ENCO GNV GOLDEN", estado: "Guanajuato" },
+    { nombre: "ENCO GNV CECA", lat: 20.6205976261752, lon: -100.4146608, precio: null, grupo: "ENCO GNV CECA", estado: "Guanajuato" },
+    { nombre: "GAS NATURAL", lat: 20.5600643240418, lon: -102.781370098294, precio: null, grupo: "GAS NATURAL", estado: "Jalisco" },
+    { nombre: "Gas Natural del Noroeste", lat: 20.4906143541315, lon: -103.224943092239, precio: null, grupo: "Gas Natural del Noroeste", estado: "Jalisco" },
+    { nombre: "ENERGÍAS LIMPIAS VALANT", lat: 20.5201987497612, lon: -103.219449928227, precio: null, grupo: "ENERGÍAS LIMPIAS VALANT", estado: "Jalisco" },
+    { nombre: "Conversiones a Gas Natural Vehicular", lat: 20.6574339902972, lon: -103.361585550091, precio: null, grupo: "Conversiones a Gas Natural Vehicular", estado: "Jalisco" },
+    { nombre: "GS3 Gas Natural", lat: 20.7158938501706, lon: -103.411615923607, precio: null, grupo: "GS3 Gas Natural", estado: "Jalisco" },
+    { nombre: "SafeGas", lat: 20.7085077827778, lon: -103.462771013466, precio: null, grupo: "SafeGas", estado: "Jalisco" },
+    { nombre: "GasAuto Tlaquepaque", lat: 20.6577552392534, lon: -103.323820046253, precio: null, grupo: "GasAuto Tlaquepaque", estado: "Jalisco" },
+    { nombre: "BLUEGAS", lat: 19.3907548, lon: -100.4443008, precio: null, grupo: "BLUEGAS", estado: "México" },
+    { nombre: "Estación de Gas Natural Gnu", lat: 19.7047297, lon: -100.7950867, precio: null, grupo: "Estación de Gas Natural Gnu", estado: "Michoacán" },
+    { nombre: "Estación GNV ONE", lat: 19.7441956367391, lon: -101.127931348707, precio: null, grupo: "Estación GNV ONE", estado: "Michoacán" },
+    { nombre: "Naturgy Parque Ecológico", lat: 19.178264950346, lon: -103.3765386, precio: null, grupo: "Naturgy Parque Ecológico", estado: "Jalisco" },
+    { nombre: "Natgas Saltillo", lat: 25.6857960957269, lon: -103.3985742, precio: null, grupo: "Natgas Saltillo", estado: "Chihuahua" },
+    { nombre: "COMEXIGAL", lat: 25.7921736, lon: -99.1809682, precio: null, grupo: "COMEXIGAL", estado: "Nuevo León" },
+    { nombre: "DGAS", lat: 25.7379224, lon: -99.0062455, precio: null, grupo: "DGAS", estado: "Nuevo León" },
+    { nombre: "ENCO GNV", lat: 25.7289178, lon: -100.2766554, precio: null, grupo: "ENCO GNV", estado: "Coahuila" },
+    { nombre: "ENCO GNV", lat: 25.7048913, lon: -99.2244748, precio: null, grupo: "ENCO GNV", estado: "Nuevo León" },
+    { nombre: "ENERGY PLUS", lat: 25.7746553, lon: -98.9841071, precio: null, grupo: "ENERGY PLUS", estado: "Nuevo León" },
+    { nombre: "Ecovía Estación Lincoln", lat: 25.7695304, lon: -101.1680733, precio: null, grupo: "Ecovía Estación Lincoln", estado: "Coahuila" },
+    { nombre: "Naturgy (cerrado)", lat: 25.6832364, lon: -101.1279955, precio: null, grupo: "Naturgy (cerrado)", estado: "Coahuila" },
+    { nombre: "GNV Estación de Servicio de Gas Natural", lat: 25.6856545, lon: -101.2447164, precio: null, grupo: "GNV Estación de Servicio de Gas Natural", estado: "Coahuila" },
+    { nombre: "GANAMEX", lat: 25.9355909, lon: -101.239562, precio: null, grupo: "GANAMEX", estado: "Coahuila" },
+    { nombre: "GHASE GNV", lat: 25.6896879, lon: -101.1543624, precio: null, grupo: "GHASE GNV", estado: "Coahuila" },
+    { nombre: "NATGAS", lat: 25.8305772, lon: -106.092208235604, precio: null, grupo: "NATGAS", estado: "Chihuahua" },
+    { nombre: "NATGAS", lat: 25.7682269803791, lon: -100.293931087448, precio: null, grupo: "NATGAS", estado: "Coahuila" },
+    { nombre: "NATGAS", lat: 25.7181094, lon: -106.028222596131, precio: null, grupo: "NATGAS", estado: "Chihuahua" },
+    { nombre: "NATGAS", lat: 25.6841532, lon: -100.356152332248, precio: null, grupo: "NATGAS", estado: "Coahuila" },
+    { nombre: "NUTURGY", lat: 25.6829484, lon: -100.30037858992, precio: null, grupo: "NUTURGY", estado: "Coahuila" },
+    { nombre: "Natgas Félix U. Gómez", lat: 25.7067348158283, lon: -100.284296446504, precio: null, grupo: "Natgas Félix U. Gómez", estado: "Nuevo León" },
+    { nombre: "Natgas Lincoln", lat: 25.7183485940923, lon: -100.284557073269, precio: null, grupo: "Natgas Lincoln", estado: "Coahuila" },
+    { nombre: "Natgas Colón", lat: 25.6843268219562, lon: -100.293109251577, precio: null, grupo: "Natgas Colón", estado: "Coahuila" },
+    { nombre: "Natgas Garza Sada", lat: 25.7137975630794, lon: -100.417024201668, precio: null, grupo: "Natgas Garza Sada", estado: "Coahuila" },
+    { nombre: "Natgas Universidad", lat: 25.7665375575642, lon: -99.9797601746878, precio: null, grupo: "Natgas Universidad", estado: "Coahuila" },
+    { nombre: "Naturgy Monterrey Madero", lat: 25.6833667501401, lon: -100.795160376537, precio: null, grupo: "Naturgy Monterrey Madero", estado: "Coahuila" },
+    { nombre: "DGas Rodrigo Gómez", lat: 25.73805026584, lon: -103.3395476388, precio: null, grupo: "DGas Rodrigo Gómez", estado: "Chihuahua" },
+    { nombre: "Todogas", lat: 25.6623678013277, lon: -103.376380205332, precio: null, grupo: "Todogas", estado: "Chihuahua" },
+    { nombre: "Gongas", lat: 25.461874630341, lon: -100.954055792, precio: null, grupo: "Gongas", estado: "Coahuila" },
+    { nombre: "Nuevo Gas Planta Libramiento - Corporativo", lat: 25.946971298943, lon: -103.339687117012, precio: null, grupo: "Nuevo Gas Planta Libramiento - Corporativo", estado: "Chihuahua" },
+    { nombre: "Carbucentro Regio Gas Central", lat: 19.110402816351, lon: -98.2814498980769, precio: null, grupo: "Carbucentro Regio Gas Central", estado: "Puebla" },
+    { nombre: "REGIO GAS CENTRAL", lat: 19.0837997091893, lon: -98.2069488611682, precio: null, grupo: "REGIO GAS CENTRAL", estado: "Puebla" },
+    { nombre: "IXTAGAS", lat: 19.0861892528725, lon: -98.1380115725775, precio: null, grupo: "IXTAGAS", estado: "Puebla" },
+    { nombre: "Gas Natural", lat: 19.0845669970998, lon: -98.1366382818477, precio: null, grupo: "Gas Natural", estado: "Puebla" },
+    { nombre: "Enco GNV Estadio", lat: 19.0803490578821, lon: -98.1699405894814, precio: null, grupo: "Enco GNV Estadio", estado: "Puebla" },
+    { nombre: "ENCO GNV PARQUE ECOLÓGICO", lat: 19.039786475236, lon: -98.1843601439263, precio: null, grupo: "ENCO GNV PARQUE ECOLÓGICO", estado: "Puebla" },
+    { nombre: "GULF GNV", lat: 20.8631693, lon: -99.1839435862291, precio: null, grupo: "GULF GNV", estado: "Hidalgo" },
+    { nombre: "NATGAS", lat: 20.7012810994669, lon: -100.433441137542, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 20.6238626475535, lon: -100.45129392058, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "Maxigas Natural", lat: 20.6299676088272, lon: -100.431724523788, precio: null, grupo: "Maxigas Natural", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 20.5380460097124, lon: -100.443054174562, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 20.6171197596906, lon: -100.42108213027, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 20.6331856332042, lon: -100.427261939783, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 20.5888397061597, lon: -100.413529029754, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 20.5869113296443, lon: -100.265213601438, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 20.5570318500925, lon: -100.220558258759, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 20.4278099886881, lon: -99.9786962707348, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "NATGAS", lat: 20.5553064602555, lon: -100.794869694723, precio: null, grupo: "NATGAS", estado: "Guanajuato" },
+    { nombre: "MAX GNV SAN LUIS REY", lat: 22.1550067547362, lon: -101.660657945837, precio: null, grupo: "MAX GNV SAN LUIS REY", estado: "Aguascalientes" },
+    { nombre: "MAXGNV SALVADOR NAVA", lat: 22.1574878, lon: -100.978860855452, precio: null, grupo: "MAXGNV SALVADOR NAVA", estado: "San Luis Potosí" },
+    { nombre: "natgas", lat: 22.1198605, lon: -99.5146214996652, precio: null, grupo: "natgas", estado: "San Luis Potosí" },
+    { nombre: "NATGAS", lat: 22.0337069, lon: -100.910802219537, precio: null, grupo: "NATGAS", estado: "San Luis Potosí" },
+    { nombre: "Natgas San Luis Potosí", lat: 22.1219784515868, lon: -100.299287931457, precio: null, grupo: "Natgas San Luis Potosí", estado: "San Luis Potosí" },
+    { nombre: "EDS Aaki Gas", lat: 29.0623455, lon: -103.353613804575, precio: null, grupo: "EDS Aaki Gas", estado: "Chihuahua" },
+    { nombre: "MAX GNV", lat: 22.1334509, lon: -99.6137374223883, precio: null, grupo: "MAX GNV", estado: "San Luis Potosí" },
+    { nombre: "Gas Natural Vehicular Urbegas", lat: 22.2052063160927, lon: -101.017656327709, precio: null, grupo: "Gas Natural Vehicular Urbegas", estado: "San Luis Potosí" },
+    { nombre: "Global Gas (Gas Menguc S.A. de C.V.)", lat: 22.1972595750708, lon: -101.030015946736, precio: null, grupo: "Global Gas (Gas Menguc S.A. de C.V.)", estado: "San Luis Potosí" },
+    { nombre: "Global Gas (Gas Menguc S.A. de C.V.)", lat: 22.1091796139598, lon: -100.950365068566, precio: null, grupo: "Global Gas (Gas Menguc S.A. de C.V.)", estado: "San Luis Potosí" },
+    { nombre: "Urbegas Gas Natural Vehicular", lat: 22.1877228921747, lon: -100.952768327821, precio: null, grupo: "Urbegas Gas Natural Vehicular", estado: "San Luis Potosí" },
+    { nombre: "Gas Natural Sieca (CONTRATACIONES, INSTALACIONES E INGENIERIAS)", lat: 22.1447998103557, lon: -100.944871904554, precio: null, grupo: "Gas Natural Sieca (CONTRATACIONES, INSTALACIONES E INGENIERIAS)", estado: "San Luis Potosí" },
+    { nombre: "Ener Gas", lat: 22.1800930796964, lon: -100.917749407247, precio: null, grupo: "Ener Gas", estado: "San Luis Potosí" },
+    { nombre: "NATGAS", lat: 22.0374161036778, lon: -100.850221523671, precio: null, grupo: "NATGAS", estado: "San Luis Potosí" },
+    { nombre: "NATGAS", lat: 22.1298531458579, lon: -100.911569597734, precio: null, grupo: "NATGAS", estado: "San Luis Potosí" },
+    { nombre: "GASOCEN S.A. de C.V.", lat: 21.9785296042334, lon: -100.817605861739, precio: null, grupo: "GASOCEN S.A. de C.V.", estado: "San Luis Potosí" },
+    { nombre: "Global Gas (Gas Menguc S.A. de C.V.)", lat: 22.1772317932138, lon: -100.962724687593, precio: null, grupo: "Global Gas (Gas Menguc S.A. de C.V.)", estado: "San Luis Potosí" },
+    { nombre: "Gas Natural Obregon", lat: 27.6689523705671, lon: -109.897394810595, precio: null, grupo: "Gas Natural Obregon", estado: "Baja California Sur" },
+    { nombre: "GAS NATURAL DEL NORTE", lat: 28.5314667285989, lon: -106.82122297014, precio: null, grupo: "GAS NATURAL DEL NORTE", estado: "Chihuahua" },
+    { nombre: "Gas Natural del Norte", lat: 30.4593459178661, lon: -107.914362600797, precio: null, grupo: "Gas Natural del Norte", estado: "Chihuahua" },
+    { nombre: "Gas Natural Vehicular - We Are ONE", lat: 29.0753752169837, lon: -110.871276895398, precio: null, grupo: "Gas Natural Vehicular - We Are ONE", estado: "Sonora" },
+    { nombre: "Gas natural del noroeste", lat: 31.2409853729996, lon: -110.365905806321, precio: null, grupo: "Gas natural del noroeste", estado: "Sonora" },
+    { nombre: "Supergas Contigo Hermosillo", lat: 29.0972704878924, lon: -103.279456052245, precio: null, grupo: "Supergas Contigo Hermosillo", estado: "Chihuahua" },
+    { nombre: "Supergas Contigo Hermosillo", lat: 29.0680284234892, lon: -100.406310779113, precio: null, grupo: "Supergas Contigo Hermosillo", estado: "Coahuila" },
+    { nombre: "Comsustenta Anacleto Canabal", lat: 18.042631433742, lon: -92.9907135229784, precio: null, grupo: "Comsustenta Anacleto Canabal", estado: "Tabasco" },
+    { nombre: "Comsustenta Paraíso Tabasco", lat: 18.43124237881, lon: -89.6812764512707, precio: null, grupo: "Comsustenta Paraíso Tabasco", estado: "Campeche" },
+    { nombre: "ESTACION DE COMPRESION DE GAS NATURAL GIGANTE", lat: 26.469443876884, lon: -99.183008174558, precio: null, grupo: "ESTACION DE COMPRESION DE GAS NATURAL GIGANTE", estado: "Nuevo León" },
+    { nombre: "Naturgy Nuevo Laredo", lat: 27.4748600579115, lon: -99.5147717033687, precio: null, grupo: "Naturgy Nuevo Laredo", estado: "Nuevo León" },
+    { nombre: "GASECO YAUHQUEMEHCAN", lat: 19.4137782454635, lon: -89.5618859645627, precio: null, grupo: "GASECO YAUHQUEMEHCAN", estado: "Campeche" },
+    { nombre: "GAS ECO Veracruz", lat: 19.1505196176291, lon: -89.6760407793165, precio: null, grupo: "GAS ECO Veracruz", estado: "Campeche" },
+    { nombre: "Mi Gas Natural Veracruz", lat: 19.1693292949752, lon: -89.6538964618999, precio: null, grupo: "Mi Gas Natural Veracruz", estado: "Campeche" },
+    { nombre: "OptaGas Natural (Gomark)", lat: 20.9706682, lon: -89.6717492447966, precio: null, grupo: "OptaGas Natural (Gomark)", estado: "Yucatán" },
+    { nombre: "Gas Natural del Noroeste Merida", lat: 20.9893281332473, lon: -89.689602027976, precio: null, grupo: "Gas Natural del Noroeste Merida", estado: "Yucatán" },
+    { nombre: "Tergia Autogas Caucel", lat: 21.0111940748777, lon: -89.7199805035129, precio: null, grupo: "Tergia Autogas Caucel", estado: "Yucatán" },
+    { nombre: "Delta Gas", lat: 21.0222108816463, lon: -89.5630855937624, precio: null, grupo: "Delta Gas", estado: "Yucatán" },
+    { nombre: "La Gas - Caucel", lat: 20.9977921264157, lon: -89.6759723458412, precio: null, grupo: "La Gas - Caucel", estado: "Yucatán" },
+    { nombre: "GAS TOMZA CANEK", lat: 20.983929626979, lon: -89.6538344016616, precio: null, grupo: "GAS TOMZA CANEK", estado: "Yucatán" },
+    { nombre: "Gas Tomza Industrial Aeropuerto", lat: 20.9331409157771, lon: -89.6725701900222, precio: null, grupo: "Gas Tomza Industrial Aeropuerto", estado: "Yucatán" },
+    { nombre: "Estación de carga GNC Binnibus", lat: 17.1415785714211, lon: -96.7773364413246, precio: null, grupo: "Estación de carga GNC Binnibus", estado: "Oaxaca" },
+    { nombre: "Gas Milenium", lat: 17.0835364487919, lon: -96.7127910841261, precio: null, grupo: "Gas Milenium", estado: "Oaxaca" },
+    { nombre: "Sonigas Campeche S.A. de C.V.", lat: 19.8051873935778, lon: -90.5080747607854, precio: null, grupo: "Sonigas Campeche S.A. de C.V.", estado: "Campeche" },
+    { nombre: "Delta Gas Umán", lat: 20.910324374301, lon: -89.722044027351, precio: null, grupo: "Delta Gas Umán", estado: "Yucatán" }
+  ];
+
+  function deduplicate(data) {
+    const seen = new Set();
+    return data.filter(e => {
+      const key = `${Math.round(e.lat*100000)/100000}|${Math.round(e.lon*100000)/100000}`;
+      if (!seen.has(key)) { seen.add(key); return true; }
+      return false;
+    });
+  }
+  const stations = deduplicate(rawData);
+
+  function getPriceRange(price) {
+    if (price === null || price === undefined) return { label: 'Sin precio', key: 'no-price', color: '#94a3b8' };
+    if (price <= 11.99) return { label: '≤ $11.99', key: 'low', color: '#10b981' };
+    if (price <= 12.99) return { label: '$12.00 – $12.99', key: 'mid', color: '#f59e0b' };
+    return { label: '≥ $13.00', key: 'high', color: '#ef4444' };
+  }
+
+  stations.forEach(s => {
+    const r = getPriceRange(s.precio);
+    s.priceKey = r.key;
+    s.priceColor = r.color;
+    s.priceLabel = r.label;
+  });
+
+  const grupos = [...new Set(stations.map(s => s.grupo))].sort((a,b) => a.localeCompare(b));
+
+  // ============================================================
+  //  2. MAPA Y CAPAS BASE
+  // ============================================================
+  const map = L.map('map', { zoomControl: true }).setView([23.5, -102.5], 5);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap · © CARTO', subdomains: 'abcd', maxZoom: 19
+  }).addTo(map);
+
+  // ============================================================
+  //  3. DUCTOS (desde ductos.js)
+  // ============================================================
+  const ductosData = window.DUCTOS_GAS || { type: "FeatureCollection", features: [] };
+  console.log(`📊 Ductos cargados: ${ductosData.features.length}`);
+
+  // Estilos para ductos
+  const DUCTO_ESTILOS = {
+    "CENAGAS (existente)":    { color: "#FF6B35", forma: "rombo",     dash: null },
+    "Gasoducto privado":      { color: "#3B82F6", forma: "cuadrado",  dash: null },
+    "Interconexión frontera": { color: "#10B981", forma: "triangulo", dash: null },
+    "Hub / Terminal":         { color: "#0EA5E9", forma: "estrella",  dash: null },
+    "En desarrollo":          { color: "#F59E0B", forma: "circulo",   dash: "6 5" },
+    "En construcción":        { color: "#8B5CF6", forma: "hexagono",  dash: "10 4" }
+  };
+  const DUCTO_DEFAULT = { color: "#95a5a6", forma: "circulo", dash: null };
+
+  function obtenerClaveEstilo(tipoReal) {
+    const t = tipoReal.trim().toLowerCase();
+    for (const [clave, _] of Object.entries(DUCTO_ESTILOS)) {
+      if (clave.toLowerCase() === t) return clave;
+    }
+    if (t.includes('cenagas') || t.includes('existente')) return 'CENAGAS (existente)';
+    if (t.includes('privado') || t.includes('privada')) return 'Gasoducto privado';
+    if (t.includes('frontera') || t.includes('interconexión')) return 'Interconexión frontera';
+    if (t.includes('hub') || t.includes('terminal')) return 'Hub / Terminal';
+    if (t.includes('desarrollo') || t.includes('planeación')) return 'En desarrollo';
+    if (t.includes('construcción') || t.includes('construccion')) return 'En construcción';
+    return null;
+  }
+
+  function ductoIconSVG(color, forma, size = 24) {
+    const bd = '#1e293b', w = 1.8;
+    const s = size, c = size/2;
+    const formas = {
+      rombo:     `<polygon points="${c},2 ${s-2},${c} ${c},${s-2} 2,${c}" fill="${color}" stroke="${bd}" stroke-width="${w}"/>`,
+      cuadrado:  `<rect x="3" y="3" width="${s-6}" height="${s-6}" rx="3" fill="${color}" stroke="${bd}" stroke-width="${w}"/>`,
+      triangulo: `<polygon points="${c},2 ${s-2},${s-2} 2,${s-2}" fill="${color}" stroke="${bd}" stroke-width="${w}" stroke-linejoin="round"/>`,
+      estrella:  `<polygon points="${c},2 ${c+4},${c-2} ${s-2},${c-4} ${c+6},${c+2} ${s-2},${s-2} ${c},${c+6} 2,${s-2} ${c-6},${c+2} 2,${c-4} ${c-4},${c-2}" fill="${color}" stroke="${bd}" stroke-width="${w}" stroke-linejoin="round"/>`,
+      circulo:   `<circle cx="${c}" cy="${c}" r="${s/2-3}" fill="${color}" stroke="${bd}" stroke-width="${w}" stroke-dasharray="3 2"/>`,
+      hexagono:  `<polygon points="${c},2 ${s-4},${c-3} ${s-4},${c+3} ${c},${s-2} 4,${c+3} 4,${c-3}" fill="${color}" stroke="${bd}" stroke-width="${w}" stroke-linejoin="round"/>`
+    };
+    return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));">${formas[forma] || formas.circulo}</svg>`;
+  }
+
+  function ductoPopup(p) {
+    const fila = (et, v) => v ? `<br><span style="color:#64748b;">${et}:</span> ${v}` : '';
+    return `<strong style="color:var(--primary);">${p.nombre || "Ducto"}</strong>
+      <br><span style="color:#64748b;">Tipo:</span> ${p.tipo || "N/A"}`
+      + fila('Permisionario', p.permisionario) + fila('Consorcio', p.consorcio)
+      + fila('Capacidad', p.capacidad ? p.capacidad + ' MMpcd' : '')
+      + fila('Longitud', p.longitud_km ? p.longitud_km + ' km' : '')
+      + fila('Permiso', p.permiso) + fila('Inicio op.', p.inicio_op) + fila('Tramo', p.tramo);
+  }
+
+  let ductosLayer = null;
+  let ductosVisibles = true;
+
+  // ---- Obtener tipos únicos (normalizados, sin "Desconocido") ----
+  function obtenerTiposUnicos(datos) {
+    const mapTipos = new Map();
+    datos.features.forEach(f => {
+      const tipoOriginal = f.properties.Tipo || f.properties.tipo || 'Desconocido';
+      let tipoNormalizado = tipoOriginal.trim();
+      const lower = tipoNormalizado.toLowerCase();
+      if (lower.includes('cenagas') && lower.includes('existente')) {
+        tipoNormalizado = 'Gasoductos existentes operados por CENAGAS';
+      }
+      if (lower === 'desconocido') return;
+      const clave = tipoNormalizado.toLowerCase();
+      if (!mapTipos.has(clave)) {
+        mapTipos.set(clave, tipoNormalizado);
+      }
+    });
+    return Array.from(mapTipos.values()).sort((a,b) => a.localeCompare(b));
+  }
+
+  // ---- Poblar el select de ductos ----
+  function poblarFiltroDuctos(datos) {
+    const select = document.getElementById('ductoFilter');
+    while (select.options.length > 1) select.remove(1);
+    const tipos = obtenerTiposUnicos(datos);
+    tipos.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t;
+      select.appendChild(opt);
+    });
+    select.value = 'all';
+  }
+
+  // ---- Actualizar leyenda de ductos ----
+  function actualizarLeyendaDuctos(datos) {
+    const legendDiv = document.querySelector('.ducto-legend');
+    if (!legendDiv) return;
+    const tipos = obtenerTiposUnicos(datos);
+    let html = `
+      <div class="title">
+        <span>Ductos</span>
+        <button class="reset-btn" id="ductoResetBtn" title="Ver todos los ductos">✕</button>
+      </div>
+    `;
+    tipos.forEach(tipo => {
+      const clave = obtenerClaveEstilo(tipo);
+      const e = clave ? DUCTO_ESTILOS[clave] : DUCTO_DEFAULT;
+      html += `
+        <div class="row" data-tipo="${tipo}">
+          <span class="swatch">${ductoIconSVG(e.color, e.forma, 18)}</span>
+          <span class="line" style="background:${e.color};${e.dash ? 'background-image:repeating-linear-gradient(90deg,'+e.color+' 0 4px,transparent 4px 7px);background-color:transparent;' : ''}"></span>
+          <span>${tipo}</span>
+        </div>
+      `;
+    });
+    legendDiv.innerHTML = html;
+    legendDiv.querySelectorAll('.row').forEach(row => {
+      row.addEventListener('click', function() {
+        const tipo = this.dataset.tipo;
+        document.getElementById('ductoFilter').value = tipo;
+        aplicarFiltroIterativo(tipo);
+      });
+    });
+    const resetBtn = legendDiv.querySelector('#ductoResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.getElementById('ductoFilter').value = 'all';
+        aplicarFiltroIterativo('all');
+        map.flyTo([23.5, -102.5], 5, { duration: 1 });
+      });
+    }
+  }
+
+  // ---- Filtro iterativo para ductos ----
+  const ductoFiltroIteracion = {};
+  let ultimoTipoSeleccionado = null;
+
+  function aplicarFiltroIterativo(tipo) {
+    if (tipo === 'all') {
+      for (const key in ductoFiltroIteracion) delete ductoFiltroIteracion[key];
+      ultimoTipoSeleccionado = null;
+      filtrarDuctos('all', 0);
+      map.flyTo([23.5, -102.5], 5, { duration: 1 });
+      document.querySelectorAll('.ducto-legend .row').forEach(row => row.classList.remove('active'));
+      return;
+    }
+
+    const tipoNorm = tipo.trim();
+    if (ultimoTipoSeleccionado !== tipoNorm) {
+      ductoFiltroIteracion[tipoNorm] = 0;
+      ultimoTipoSeleccionado = tipoNorm;
+    } else {
+      if (!(tipoNorm in ductoFiltroIteracion)) ductoFiltroIteracion[tipoNorm] = 0;
+      ductoFiltroIteracion[tipoNorm]++;
+    }
+
+    let index = ductoFiltroIteracion[tipoNorm];
+    const ductosDelTipo = ductosData.features.filter(f => {
+      const t = f.properties.Tipo || f.properties.tipo || 'Desconocido';
+      return t.trim().toLowerCase() === tipoNorm.toLowerCase();
+    });
+    const total = ductosDelTipo.length;
+    if (total === 0) return;
+
+    if (index > total) {
+      index = 0;
+      ductoFiltroIteracion[tipoNorm] = 0;
+    }
+
+    filtrarDuctos(tipoNorm, index);
+
+    if (index === 0) {
+      centrarEnDuctos(tipoNorm);
+    } else {
+      const ducto = ductosDelTipo[index - 1];
+      if (ducto) {
+        const coords = ducto.geometry.coordinates;
+        const latLngs = coords.map(c => [c[1], c[0]]);
+        const bounds = L.latLngBounds(latLngs);
+        map.flyToBounds(bounds, { padding: [40, 40], duration: 1 });
+      }
+    }
+
+    document.getElementById('ductoFilter').value = tipo;
+    document.querySelectorAll('.ducto-legend .row').forEach(row => {
+      const rowTipo = row.dataset.tipo;
+      if (rowTipo && rowTipo.trim().toLowerCase() === tipoNorm.toLowerCase()) {
+        row.classList.add('active');
+      } else {
+        row.classList.remove('active');
+      }
+    });
+  }
+
+  function filtrarDuctos(tipoSeleccionado, index) {
+    if (!ductosLayer) return;
+    const tipoNorm = tipoSeleccionado.trim().toLowerCase();
+
+    let layersDelTipo = [];
+    if (index > 0) {
+      ductosLayer.eachLayer(function(layer) {
+        const props = layer.feature ? layer.feature.properties : {};
+        const tipoFeature = (props.tipo || "CENAGAS (existente)").trim().toLowerCase();
+        if (tipoFeature === tipoNorm) {
+          layersDelTipo.push(layer);
+        }
+      });
+      const orderMap = {};
+      ductosData.features.forEach((f, i) => {
+        const t = (f.properties.Tipo || f.properties.tipo || 'Desconocido').trim().toLowerCase();
+        if (t === tipoNorm) {
+          const nombre = f.properties.nombre || '';
+          orderMap[nombre] = i;
+        }
+      });
+      layersDelTipo.sort((a, b) => {
+        const nameA = a.feature ? a.feature.properties.nombre || '' : '';
+        const nameB = b.feature ? b.feature.properties.nombre || '' : '';
+        return (orderMap[nameA] || 0) - (orderMap[nameB] || 0);
+      });
+    }
+
+    ductosLayer.eachLayer(function(layer) {
+      const props = layer.feature ? layer.feature.properties : {};
+      const tipoFeature = (props.tipo || "CENAGAS (existente)").trim().toLowerCase();
+      let visible = false;
+      if (tipoNorm === 'all') {
+        visible = true;
+      } else if (tipoFeature === tipoNorm) {
+        if (index === 0) {
+          visible = true;
+        } else {
+          const pos = layersDelTipo.indexOf(layer);
+          visible = (pos === index - 1);
+        }
+      } else {
+        visible = false;
+      }
+      if (typeof layer.setStyle === 'function') {
+        layer.setStyle({ opacity: visible ? 0.85 : 0.05, weight: visible ? 3 : 1 });
+      } else if (typeof layer.setOpacity === 'function') {
+        layer.setOpacity(visible ? 1 : 0.1);
+      }
+    });
+  }
+
+  function centrarEnDuctos(tipo) {
+    if (!ductosLayer || !ductosLayer.getLayers().length) {
+      alert('No hay ductos cargados.');
+      return;
+    }
+    const bounds = new L.LatLngBounds();
+    let encontrados = 0;
+    const tipoNorm = tipo.trim().toLowerCase();
+    ductosLayer.eachLayer(function(layer) {
+      const props = layer.feature ? layer.feature.properties : {};
+      const tipoFeature = (props.tipo || "CENAGAS (existente)").trim().toLowerCase();
+      if (tipoNorm === 'all' || tipoFeature === tipoNorm) {
+        try {
+          const latlngs = layer.getLatLngs ? layer.getLatLngs() : [layer.getLatLng()];
+          if (Array.isArray(latlngs)) {
+            latlngs.forEach(ll => {
+              if (Array.isArray(ll)) {
+                ll.forEach(p => bounds.extend(p));
+              } else if (ll.lat && ll.lng) {
+                bounds.extend(ll);
+              }
+            });
+          } else if (latlngs.lat && latlngs.lng) {
+            bounds.extend(latlngs);
+          }
+          encontrados++;
+        } catch (e) {}
+      }
+    });
+    if (encontrados === 0) {
+      alert(`No se encontraron ductos del tipo "${tipo}".`);
+      return;
+    }
+    if (bounds.isValid()) {
+      map.flyToBounds(bounds, { padding: [60, 60], duration: 1.2 });
+    }
+  }
+
+  // ---- Crear capa de ductos ----
+  function crearCapaDuctos(datos) {
+    if (ductosLayer) {
+      map.removeLayer(ductosLayer);
+      ductosLayer = null;
+    }
+    if (!datos || !datos.features || datos.features.length === 0) {
+      ductosLayer = L.layerGroup().addTo(map);
+      return;
+    }
+    try {
+      ductosLayer = L.geoJSON(datos, {
+        style: function(feature) {
+          const tipoReal = feature.properties.tipo || "CENAGAS (existente)";
+          const clave = obtenerClaveEstilo(tipoReal);
+          const e = clave ? DUCTO_ESTILOS[clave] : DUCTO_DEFAULT;
+          return { color: e.color, weight: 3, opacity: 0.85, dashArray: e.dash };
+        },
+        pointToLayer: function(feature, latlng) {
+          const tipoReal = feature.properties.tipo || "CENAGAS (existente)";
+          const clave = obtenerClaveEstilo(tipoReal);
+          const e = clave ? DUCTO_ESTILOS[clave] : DUCTO_DEFAULT;
+          return L.marker(latlng, {
+            icon: L.divIcon({
+              className: 'ducto-pin',
+              html: ductoIconSVG(e.color, e.forma, 26),
+              iconSize: [26, 26], iconAnchor: [13, 13], popupAnchor: [0, -13]
+            }),
+            zIndexOffset: -500,
+            title: feature.properties.nombre || 'Ducto'
+          });
+        },
+        onEachFeature: function(feature, layer) {
+          layer.feature = feature;
+          layer.bindPopup(ductoPopup(feature.properties), { maxWidth: 280 });
+        }
+      }).addTo(map);
+      console.log(`✅ Capa de ductos creada: ${datos.features.length} ductos.`);
+    } catch (e) {
+      console.warn('⚠️ Error al crear capa de ductos:', e);
+      ductosLayer = L.layerGroup().addTo(map);
+    }
+  }
+
+  // ---- Añadir leyenda de ductos (control Leaflet) ----
+  function agregarLeyendaDuctos() {
+    const control = L.control({ position: 'bottomleft' });
+    control.onAdd = function() {
+      const div = L.DomUtil.create('div', 'ducto-legend');
+      div.innerHTML = `
+        <div class="title">
+          <span>Ductos</span>
+          <button class="reset-btn" id="ductoResetBtn" title="Ver todos los ductos">✕</button>
+        </div>
+      `;
+      setTimeout(() => actualizarLeyendaDuctos(ductosData), 50);
+      return div;
+    };
+    control.addTo(map);
+    console.log('✅ Leyenda de ductos añadida al mapa.');
+  }
+
+  // ---- Inicializar ductos ----
+  crearCapaDuctos(ductosData);
+  poblarFiltroDuctos(ductosData);
+  agregarLeyendaDuctos();
+
+  // ---- Eventos para los botones de ductos ----
+  document.getElementById('ductoFilter').addEventListener('change', function() {
+    const tipo = this.value;
+    aplicarFiltroIterativo(tipo);
+  });
+
+  document.getElementById('toggleDuctosBtn').addEventListener('click', function() {
+    if (ductosVisibles) {
+      if (ductosLayer) map.removeLayer(ductosLayer);
+      ductosVisibles = false;
+      document.getElementById('ductosToggleIcon').className = 'fas fa-eye-slash';
+      document.getElementById('ductosToggleLabel').textContent = 'Mostrar ductos';
+    } else {
+      if (ductosLayer) map.addLayer(ductosLayer);
+      ductosVisibles = true;
+      document.getElementById('ductosToggleIcon').className = 'fas fa-eye';
+      document.getElementById('ductosToggleLabel').textContent = 'Ocultar ductos';
+    }
+  });
+
+  document.getElementById('centerDuctosBtn').addEventListener('click', function() {
+    if (!ductosData || ductosData.features.length === 0) {
+      map.flyTo([23.5, -102.5], 5);
+      return;
+    }
+    const bounds = new L.LatLngBounds();
+    ductosData.features.forEach(f => {
+      const coords = f.geometry.coordinates;
+      if (coords && coords.length) {
+        coords.forEach(coord => {
+          bounds.extend([coord[1], coord[0]]);
+        });
+      }
+    });
+    if (bounds.isValid()) {
+      map.flyToBounds(bounds, { padding: [60, 60], duration: 1.2 });
+    } else {
+      map.flyTo([23.5, -102.5], 5);
+    }
+  });
+
+  // ============================================================
+  //  4. ESTACIONES GNV (clúster, marcadores, filtros)
+  // ============================================================
+  const cluster = L.markerClusterGroup({
+    maxClusterRadius: 50,
+    iconCreateFunction: function(c) {
+      const n = c.getChildCount();
+      const s = n < 10 ? 38 : n < 50 ? 46 : 54;
+      return L.divIcon({
+        html: `<div class="bubble" style="font-size:${n<100?12:11}px;">${n}</div>`,
+        className: 'gnv-cluster', iconSize: [s, s]
+      });
+    },
+    zoomToBoundsOnClick: true
+  });
+  map.addLayer(cluster);
+  const markerMap = new Map();
+
+  function pinSVG(color) {
+    return `<svg width="28" height="40" viewBox="0 0 28 40" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 3px 4px rgba(0,0,0,0.2));">
+      <path d="M14 0 C6.27 0 0 6.27 0 14 C0 24.5 14 40 14 40 S28 24.5 28 14 C28 6.27 21.73 0 14 0 Z" fill="${color}" stroke="#1e293b" stroke-width="1.2"/>
+      <circle cx="14" cy="14" r="5" fill="white" stroke="#1e293b" stroke-width="1"/>
+    </svg>`;
+  }
+
+  stations.forEach(s => {
+    const marker = L.marker([s.lat, s.lon], {
+      icon: L.divIcon({ className: '', html: pinSVG(s.priceColor), iconSize: [28,40], iconAnchor: [14,40], popupAnchor: [0,-37] }),
+      title: s.nombre
+    });
+    
+    marker.bindPopup(() => {
+      const p = s.precio ? `$${s.precio.toFixed(2)} / litro` : 'Sin precio';
+      return `<div style="padding:0.2rem;">
+        <strong style="font-size:1.05rem;color:var(--primary);">${s.nombre}</strong><br>
+        <span style="color:var(--text-muted);font-size:0.8rem;">${s.grupo} · ${s.estado || '...'}</span><br>
+        <div style="margin-top:6px; display:flex; align-items:center; gap:6px;">
+          <span style="display:block;width:10px;height:10px;border-radius:50%;background:${s.priceColor};"></span>
+          <span style="color:#0f172a;font-weight:600;">${p}</span>
+        </div>
+      </div>`;
+    }, { className: '', maxWidth: 260 });
+
+    marker.data = s;
+    markerMap.set(s, { marker, data: s });
+    cluster.addLayer(marker);
+  });
+
+  let clusterTimer = null;
+  cluster.on('clustermouseover', function(e) {
+    if (clusterTimer) clearTimeout(clusterTimer);
+    const layer = e.layer;
+    const markers = layer.getAllChildMarkers().sort((a,b)=>a.data.nombre.localeCompare(b.data.nombre));
+    let html = '<div class="cluster-popup-list">';
+    markers.forEach(m => {
+      html += `<div class="item"><span class="name">${m.data.nombre}</span><span class="state">${m.data.estado||''}</span></div>`;
+    });
+    html += '</div>';
+    layer.bindPopup(html, { className: 'cluster-popup', maxWidth: 300, maxHeight: 250 }).openPopup();
+  });
+  cluster.on('clustermouseout', function(e) {
+    clusterTimer = setTimeout(() => e.layer.closePopup(), 1500);
+  });
+
+  // ============================================================
+  //  5. LEYENDA DE PRECIOS (GNV)
+  // ============================================================
+  const legendControl = L.control({ position: 'bottomright' });
+  legendControl.onAdd = function() {
+    const div = L.DomUtil.create('div', 'price-legend');
+    div.innerHTML = `<div class="title">Precio / litro <button class="clear-btn" id="legendClearBtn" title="Limpiar filtro">✕</button></div>`;
+    const ranges = [
+      { label: '≤ $11.99', key: 'low', color: '#10b981' },
+      { label: '$12.00 – $12.99', key: 'mid', color: '#f59e0b' },
+      { label: '≥ $13.00', key: 'high', color: '#ef4444' },
+      { label: 'Sin precio', key: 'no-price', color: '#94a3b8' }
+    ];
+    ranges.forEach(r => {
+      const count = stations.filter(s => s.priceKey === r.key).length;
+      div.innerHTML += `<div class="row" data-key="${r.key}">
+        <span class="color-dot" style="background:${r.color};"></span>
+        <span class="label">${r.label}</span>
+        <span class="count">${count}</span>
+      </div>`;
+    });
+    return div;
+  };
+  legendControl.addTo(map);
+
+  // ============================================================
+  //  6. FILTROS DE ESTACIONES
+  // ============================================================
+  let activePrice = null, activeState = 'all', searchTerm = '';
+  const filterSelect = document.getElementById('groupFilter');
+  grupos.forEach(g => filterSelect.appendChild(new Option(g, g)));
+
+  function applyFilters() {
+    const grp = filterSelect.value, term = searchTerm.toLowerCase(), st = document.getElementById('stateFilter').value;
+    const visible = stations.filter(s => 
+      (grp === 'all' || s.grupo === grp) &&
+      (term === '' || s.nombre.toLowerCase().includes(term)) &&
+      (activePrice === null || s.priceKey === activePrice) &&
+      (st === 'all' || s.estado === st)
+    );
+
+    cluster.clearLayers();
+    visible.forEach(s => cluster.addLayer(markerMap.get(s).marker));
+    
+    document.getElementById('rMatch').textContent = visible.length;
+    document.getElementById('listCnt').textContent = visible.length;
+    renderList(visible);
+    updateLegendUI();
+
+    document.getElementById('clearAllBtn').classList.toggle('hidden', !(activePrice || st !== 'all' || term || grp !== 'all'));
+  }
+
+  function updateLegendUI() {
+    document.querySelectorAll('.price-legend .row').forEach(row => {
+      row.classList.toggle('active', row.dataset.key === activePrice);
+    });
+  }
+
+  setTimeout(() => {
+    document.querySelector('.price-legend').addEventListener('click', e => {
+      const row = e.target.closest('.row');
+      if (row) { activePrice = activePrice === row.dataset.key ? null : row.dataset.key; applyFilters(); }
+      if (e.target.closest('#legendClearBtn')) { activePrice = null; applyFilters(); }
+    });
+  }, 100);
+
+  filterSelect.addEventListener('change', applyFilters);
+  document.getElementById('stateFilter').addEventListener('change', applyFilters);
+
+  let debounceTimer;
+  document.getElementById('searchInput').addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => { searchTerm = this.value; applyFilters(); }, 300);
+  });
+
+  document.getElementById('clearAllBtn').addEventListener('click', () => {
+    activePrice = null; searchTerm = '';
+    filterSelect.value = 'all'; document.getElementById('stateFilter').value = 'all';
+    document.getElementById('searchInput').value = '';
+    applyFilters();
+    map.flyTo([23.5, -102.5], 5, { duration: 1 });
+  });
+
+  function renderList(items) {
+    const ul = document.getElementById('list');
+    ul.innerHTML = '';
+    if (!items.length) { ul.innerHTML = '<li class="empty">No hay estaciones que coincidan</li>'; return; }
+    
+    const frag = document.createDocumentFragment();
+    items.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(s => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="top-row">
+          <span class="name">${s.nombre}</span>
+          ${s.precio ? `<span class="price">$${s.precio.toFixed(2)}</span>` : ''}
+        </div>
+        <span class="state-tag">${s.estado || '...'}</span>
+      `;
+      li.onclick = () => { map.flyTo([s.lat, s.lon], 16); markerMap.get(s).marker.openPopup(); };
+      frag.appendChild(li);
+    });
+    ul.appendChild(frag);
+  }
+
+  // ============================================================
+  //  7. CONTROLES ADICIONALES
+  // ============================================================
+  document.getElementById('resetBtn').addEventListener('click', () => map.flyTo([23.5, -102.5], 5));
+  
+  document.getElementById('toggleRailBtn').addEventListener('click', () => {
+    const rail = document.getElementById('railPanel');
+    rail.classList.toggle('hidden');
+    document.getElementById('railToggleIcon').className = rail.classList.contains('hidden') ? 'fas fa-chevron-left' : 'fas fa-chevron-right';
+    setTimeout(() => map.invalidateSize(), 300);
+  });
+
+  const locBtn = document.getElementById('locBtn');
+  let locMarker, locCircle;
+  locBtn.addEventListener('click', () => {
+    if (locMarker) { map.removeLayer(locMarker); map.removeLayer(locCircle); locMarker=null; map.flyTo([23.5, -102.5], 5); return; }
+    if (!navigator.geolocation) return alert('Geolocalización no soportada.');
+    locBtn.classList.add('loading');
+    navigator.geolocation.getCurrentPosition(pos => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      map.flyTo([latitude, longitude], 13);
+      locMarker = L.marker([latitude, longitude], { icon: L.divIcon({ className: 'location-marker', html: '<div class="dot"></div>', iconSize: [18,18] }) }).addTo(map);
+      locCircle = L.circle([latitude, longitude], { radius: accuracy, color: 'var(--secondary)', weight: 1 }).addTo(map);
+      locBtn.classList.remove('loading');
+    }, () => { alert('No se pudo obtener la ubicación.'); locBtn.classList.remove('loading'); });
+  });
+
+  // ============================================================
+  //  8. INICIALIZACIÓN FINAL
+  // ============================================================
+  document.getElementById('rTotal').textContent = stations.length;
+  document.getElementById('rGroups').textContent = grupos.length;
+  setTimeout(() => map.invalidateSize(), 100);
+
+  function initStatesAndFilters() {
+    const states = [...new Set(stations.map(s => s.estado).filter(Boolean))].sort();
+    const select = document.getElementById('stateFilter');
+    states.forEach(st => select.appendChild(new Option(st, st)));
+    applyFilters();
+  }
+
+  initStatesAndFilters();
+  console.log('✅ Mapa GNV con ductos integrados.');
+})();
+</script>
+</body>
+</html>
