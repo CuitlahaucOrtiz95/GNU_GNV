@@ -10,7 +10,6 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    /* ===== ESTILOS COMPLETOS (igual que antes, incluyendo el modal) ===== */
     :root {
       --primary: #1F5CA9;
       --primary-hover: #004a8f;
@@ -76,7 +75,6 @@
     }
     .topbar .stats { display: none; }
     
-    /* Botón de Mapbox */
     .btn-gear {
       background: rgba(255,255,255,0.15) !important;
       color: #fff !important;
@@ -208,7 +206,7 @@
       border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(39,191,240,0.25), 0 0 12px rgba(39,191,240,0.7);
     }
 
-    /* ===== LEYENDAS ===== */
+    /* ===== LEYENDAS (con z-index ajustado) ===== */
     .price-legend {
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(8px);
@@ -223,7 +221,7 @@
       position: absolute;
       bottom: 20px;
       right: 10px;
-      z-index: 1000;
+      z-index: 500; /* menor que los controles de Leaflet (1000) */
       max-width: 160px;
     }
     .price-legend .title {
@@ -260,7 +258,7 @@
       position: absolute;
       bottom: 20px;
       left: 10px;
-      z-index: 1000;
+      z-index: 500;
       max-width: 140px;
     }
     .ducto-legend .title {
@@ -364,7 +362,7 @@
       .ducto-legend .line { width: 10px; height: 2px; }
       .ducto-legend .swatch { width: 10px; height: 10px; }
       
-      .leaflet-control-zoom { transform: scale(0.8); transform-origin: bottom left; }
+      .leaflet-control-zoom { transform: scale(0.8); transform-origin: top right; }
     }
 
     @media (max-width: 480px) {
@@ -459,20 +457,13 @@
   "use strict";
 
   // ============================================================
-  //  0. TOKEN DE MAPBOX POR DEFECTO (integrado)
+  //  0. TOKEN DE MAPBOX (incrustado)
   // ============================================================
   const DEFAULT_TOKEN = 'pk.eyJ1IjoidGxhaHVhY2dudTk1IiwiYSI6ImNtcmpjNmZjODAxZXQzMHB1Mm9vOWh0ZjEifQ.osKvuLgEUeb4YT2dN7-q9A';
-
-  // Si no hay token guardado en localStorage, guardar el token por defecto
-  if (!localStorage.getItem('MAPBOX_TOKEN_GNV')) {
-    localStorage.setItem('MAPBOX_TOKEN_GNV', DEFAULT_TOKEN);
-    console.log('✅ Token de Mapbox guardado automáticamente');
-  }
-
-  let currentToken = localStorage.getItem('MAPBOX_TOKEN_GNV') || '';
+  let currentToken = localStorage.getItem('MAPBOX_TOKEN_GNV') || DEFAULT_TOKEN;
 
   // ============================================================
-  //  GESTIÓN DEL MODAL (opcional, el token ya está guardado)
+  //  1. GESTIÓN DEL MODAL
   // ============================================================
   const overlay   = document.getElementById('tokenOverlay');
   const tokenIn   = document.getElementById('tokenInput');
@@ -485,7 +476,7 @@
     tokenIn.value = currentToken;
     tokenIn.classList.remove('error');
     statusEl.innerHTML = '';
-    removeBtn.classList.toggle('hidden', !currentToken);
+    removeBtn.classList.toggle('hidden', !currentToken || currentToken === DEFAULT_TOKEN);
     overlay.classList.add('visible');
     setTimeout(() => tokenIn.focus(), 200);
   }
@@ -517,7 +508,7 @@
       currentToken = t;
       localStorage.setItem('MAPBOX_TOKEN_GNV', t);
       statusEl.innerHTML = '<div class="status ok">✓ Token válido — capas de Mapbox activadas</div>';
-      initBaseLayers(currentToken);
+      rebuildBaseLayers();
       setTimeout(hideTokenModal, 800);
     } else {
       statusEl.innerHTML = '<div class="status err">✗ Token inválido — verifica y vuelve a intentar</div>';
@@ -529,7 +520,11 @@
 
   skipBtn.addEventListener('click', () => {
     hideTokenModal();
-    if (!currentToken) initBaseLayers('');
+    if (!currentToken) {
+      currentToken = '';
+      localStorage.removeItem('MAPBOX_TOKEN_GNV');
+      rebuildBaseLayers();
+    }
   });
 
   removeBtn.addEventListener('click', () => {
@@ -537,7 +532,7 @@
     localStorage.removeItem('MAPBOX_TOKEN_GNV');
     tokenIn.value = '';
     statusEl.innerHTML = '<div class="status err">Token eliminado — usando capas gratuitas</div>';
-    initBaseLayers('');
+    rebuildBaseLayers();
     removeBtn.classList.add('hidden');
   });
 
@@ -547,12 +542,16 @@
 
   function updateMapboxIndicator() {
     const dot = document.getElementById('mapboxDot');
-    dot.style.display = currentToken ? 'inline-block' : 'none';
+    if (currentToken) {
+      dot.style.display = 'inline-block';
+    } else {
+      dot.style.display = 'none';
+    }
   }
   updateMapboxIndicator();
 
   // ============================================================
-  //  1. FUNCIONES AUXILIARES
+  //  2. FUNCIONES AUXILIARES
   // ============================================================
   function deduplicate(data) {
     const seen = new Set();
@@ -571,7 +570,7 @@
   }
 
   // ============================================================
-  //  2. CARGA DE ESTACIONES DESDE localStorage
+  //  3. CARGA DE ESTACIONES (con localStorage)
   // ============================================================
   let rawData = window.ESTACIONES || [];
   const estacionesGuardado = localStorage.getItem('ESTACIONES_JS');
@@ -596,44 +595,78 @@
   const grupos = [...new Set(stations.map(s => s.grupo))].sort((a,b) => a.localeCompare(b));
 
   // ============================================================
-  //  3. MAPA Y CAPAS BASE (con Mapbox o fallback)
+  //  4. MAPA Y CAPAS BASE (con control de capas)
   // ============================================================
   const map = L.map('map', { zoomControl: false }).setView([23.5, -102.5], 5);
-  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  
+  // Control de zoom en la esquina superior derecha (para que no se superponga con leyendas)
+  L.control.zoom({ position: 'topright' }).addTo(map);
 
-  let currentLayer = null;
+  // Capas disponibles
+  let layerControl = null;
+  let currentBaseLayer = null;
 
-  function initBaseLayers(token) {
-    if (currentLayer) {
-      map.removeLayer(currentLayer);
-      currentLayer = null;
-    }
+  function buildBaseLayers(token) {
+    const layers = {};
 
-    let layer;
+    // Capa gratuita (CARTO) – siempre disponible
+    layers["🗺️ Calles (CARTO)"] = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap · © CARTO',
+      subdomains: 'abcd',
+      maxZoom: 19
+    });
+
+    // Capas de Mapbox (si hay token)
     if (token) {
-      layer = L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=${token}`, {
-        attribution: '© Mapbox © OpenStreetMap',
-        tileSize: 512,
-        zoomOffset: -1,
-        maxZoom: 20
-      });
-    } else {
-      layer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap · © CARTO',
-        subdomains: 'abcd',
-        maxZoom: 19
-      });
+      const mb = (style, label) => L.tileLayer(
+        `https://api.mapbox.com/styles/v1/mapbox/${style}/tiles/{z}/{x}/{y}?access_token=${token}`, {
+          tileSize: 512,
+          zoomOffset: -1,
+          maxZoom: 20,
+          attribution: '© Mapbox © OpenStreetMap'
+        }
+      );
+      layers["🗺️ Mapbox Calles"] = mb('streets-v12', 'Calles');
+      layers["🛰️ Mapbox Satélite"] = mb('satellite-streets-v12', 'Satélite');
+      layers["🌙 Mapbox Oscuro"] = mb('dark-v11', 'Oscuro');
+      layers["💡 Mapbox Claro"] = mb('light-v11', 'Claro');
+      layers["🏔️ Mapbox Exterior"] = mb('outdoors-v12', 'Exterior');
     }
-    layer.addTo(map);
-    currentLayer = layer;
+
+    return layers;
+  }
+
+  function rebuildBaseLayers() {
+    // Eliminar control anterior
+    if (layerControl) {
+      map.removeControl(layerControl);
+      layerControl = null;
+    }
+
+    // Quitar capa base actual
+    if (currentBaseLayer) {
+      map.removeLayer(currentBaseLayer);
+      currentBaseLayer = null;
+    }
+
+    const layers = buildBaseLayers(currentToken);
+    // Establecer la primera capa (CARTO o Mapbox si hay token) como activa
+    const firstKey = Object.keys(layers)[0];
+    if (firstKey) {
+      currentBaseLayer = layers[firstKey];
+      currentBaseLayer.addTo(map);
+    }
+
+    // Crear control de capas
+    layerControl = L.control.layers(layers).addTo(map);
     updateMapboxIndicator();
   }
 
-  // Inicializar con el token actual
-  initBaseLayers(currentToken);
+  // Inicializar capas
+  rebuildBaseLayers();
 
   // ============================================================
-  //  4. DUCTOS (desde ductos.js) - Código completo
+  //  5. DUCTOS (desde ductos.js)
   // ============================================================
   const ductosData = window.DUCTOS_GAS || { type: "FeatureCollection", features: [] };
   console.log(`📊 Ductos cargados: ${ductosData.features.length}`);
@@ -1013,7 +1046,7 @@
   });
 
   // ============================================================
-  //  5. ESTACIONES GNV (marcadores, clúster, filtros)
+  //  6. ESTACIONES GNV (marcadores, clúster, filtros)
   // ============================================================
   const cluster = L.markerClusterGroup({
     maxClusterRadius: 50,
@@ -1087,7 +1120,7 @@
   });
 
   // ============================================================
-  //  6. LEYENDA DE PRECIOS
+  //  7. LEYENDA DE PRECIOS
   // ============================================================
   const legendControl = L.control({ position: 'bottomright' });
   legendControl.onAdd = function() {
@@ -1112,7 +1145,7 @@
   legendControl.addTo(map);
 
   // ============================================================
-  //  7. FILTROS DE ESTACIONES
+  //  8. FILTROS DE ESTACIONES
   // ============================================================
   let activePrice = null, activeState = 'all', searchTerm = '';
   const filterSelect = document.getElementById('groupFilter');
@@ -1191,10 +1224,11 @@
   }
 
   // ============================================================
-  //  8. CONTROLES ADICIONALES
+  //  9. CONTROLES ADICIONALES
   // ============================================================
   document.getElementById('resetBtn').addEventListener('click', () => map.flyTo([23.5, -102.5], 5));
   
+  // Toggle rail (responsive: se desliza desde abajo)
   let railVisible = false;
   document.getElementById('toggleRailBtn').addEventListener('click', function() {
     const rail = document.getElementById('railPanel');
@@ -1238,7 +1272,7 @@
   });
 
   // ============================================================
-  //  9. RECARGA DE DUCTOS Y ESTACIONES
+  //  10. RECARGA DE DUCTOS Y ESTACIONES (desde localStorage)
   // ============================================================
   function recargarDuctos() {
     const nuevoJS = localStorage.getItem('DUCTOS_JS');
@@ -1328,7 +1362,7 @@
   }
 
   // ============================================================
-  //  10. ESCUCHAR ACTUALIZACIONES DESDE LOCALSTORAGE
+  //  11. ESCUCHAR ACTUALIZACIONES DESDE LOCALSTORAGE
   // ============================================================
   window.addEventListener('storage', function(e) {
     if (e.key === 'DUCTOS_ACTUALIZADO') {
@@ -1341,7 +1375,7 @@
   });
 
   // ============================================================
-  //  11. INICIALIZACIÓN FINAL
+  //  12. INICIALIZACIÓN FINAL
   // ============================================================
   document.getElementById('rTotal').textContent = stations.length;
   document.getElementById('rGroups').textContent = grupos.length;
