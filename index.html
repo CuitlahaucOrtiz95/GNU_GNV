@@ -459,11 +459,21 @@
   "use strict";
 
   // ============================================================
-  //  0. GESTIÓN DEL TOKEN DE MAPBOX
+  //  0. TOKEN DE MAPBOX POR DEFECTO (integrado)
   // ============================================================
+  const DEFAULT_TOKEN = 'pk.eyJ1IjoidGxhaHVhY2dudTk1IiwiYSI6ImNtcmpjNmZjODAxZXQzMHB1Mm9vOWh0ZjEifQ.osKvuLgEUeb4YT2dN7-q9A';
+
+  // Si no hay token guardado en localStorage, guardar el token por defecto
+  if (!localStorage.getItem('MAPBOX_TOKEN_GNV')) {
+    localStorage.setItem('MAPBOX_TOKEN_GNV', DEFAULT_TOKEN);
+    console.log('✅ Token de Mapbox guardado automáticamente');
+  }
+
   let currentToken = localStorage.getItem('MAPBOX_TOKEN_GNV') || '';
 
-  // Elementos del modal
+  // ============================================================
+  //  GESTIÓN DEL MODAL (opcional, el token ya está guardado)
+  // ============================================================
   const overlay   = document.getElementById('tokenOverlay');
   const tokenIn   = document.getElementById('tokenInput');
   const saveBtn   = document.getElementById('tokenSaveBtn');
@@ -483,7 +493,6 @@
     overlay.classList.remove('visible');
   }
 
-  // Validar token contra la API de Mapbox
   async function validateToken(token) {
     try {
       const resp = await fetch(`https://api.mapbox.com/styles/v1/mapbox/streets-v12?access_token=${token}`);
@@ -508,7 +517,6 @@
       currentToken = t;
       localStorage.setItem('MAPBOX_TOKEN_GNV', t);
       statusEl.innerHTML = '<div class="status ok">✓ Token válido — capas de Mapbox activadas</div>';
-      // Recrear capa base
       initBaseLayers(currentToken);
       setTimeout(hideTokenModal, 800);
     } else {
@@ -537,14 +545,9 @@
 
   document.getElementById('mapboxGearBtn').addEventListener('click', showTokenModal);
 
-  // Actualizar indicador de Mapbox en el botón
   function updateMapboxIndicator() {
     const dot = document.getElementById('mapboxDot');
-    if (currentToken) {
-      dot.style.display = 'inline-block';
-    } else {
-      dot.style.display = 'none';
-    }
+    dot.style.display = currentToken ? 'inline-block' : 'none';
   }
   updateMapboxIndicator();
 
@@ -568,7 +571,7 @@
   }
 
   // ============================================================
-  //  2. CARGA DE ESTACIONES DESDE localStorage (prioridad)
+  //  2. CARGA DE ESTACIONES DESDE localStorage
   // ============================================================
   let rawData = window.ESTACIONES || [];
   const estacionesGuardado = localStorage.getItem('ESTACIONES_JS');
@@ -601,7 +604,6 @@
   let currentLayer = null;
 
   function initBaseLayers(token) {
-    // Eliminar la capa base anterior si existe
     if (currentLayer) {
       map.removeLayer(currentLayer);
       currentLayer = null;
@@ -609,7 +611,6 @@
 
     let layer;
     if (token) {
-      // Usar Mapbox
       layer = L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=${token}`, {
         attribution: '© Mapbox © OpenStreetMap',
         tileSize: 512,
@@ -617,7 +618,6 @@
         maxZoom: 20
       });
     } else {
-      // Fallback: CARTO (gratuito)
       layer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap · © CARTO',
         subdomains: 'abcd',
@@ -629,11 +629,11 @@
     updateMapboxIndicator();
   }
 
-  // Inicializar con el token actual (o sin él)
+  // Inicializar con el token actual
   initBaseLayers(currentToken);
 
   // ============================================================
-  //  4. DUCTOS (desde ductos.js)
+  //  4. DUCTOS (desde ductos.js) - Código completo
   // ============================================================
   const ductosData = window.DUCTOS_GAS || { type: "FeatureCollection", features: [] };
   console.log(`📊 Ductos cargados: ${ductosData.features.length}`);
@@ -1195,7 +1195,6 @@
   // ============================================================
   document.getElementById('resetBtn').addEventListener('click', () => map.flyTo([23.5, -102.5], 5));
   
-  // Toggle rail (responsive: se desliza desde abajo)
   let railVisible = false;
   document.getElementById('toggleRailBtn').addEventListener('click', function() {
     const rail = document.getElementById('railPanel');
@@ -1210,7 +1209,6 @@
     setTimeout(() => map.invalidateSize(), 300);
   });
 
-  // Cerrar rail al hacer clic fuera en móviles
   document.addEventListener('click', function(e) {
     if (window.innerWidth <= 768 && railVisible) {
       const rail = document.getElementById('railPanel');
@@ -1240,7 +1238,7 @@
   });
 
   // ============================================================
-  //  9. RECARGA DE DUCTOS Y ESTACIONES (desde localStorage)
+  //  9. RECARGA DE DUCTOS Y ESTACIONES
   // ============================================================
   function recargarDuctos() {
     const nuevoJS = localStorage.getItem('DUCTOS_JS');
