@@ -290,21 +290,6 @@
     .cluster-popup-list .item .name { color: var(--text-main); font-weight: 500; }
     .cluster-popup-list .item .state { color: var(--text-muted); font-size: 0.6rem; background: #f8fafc; padding: 1px 4px; border-radius: 8px; }
 
-    /* ===== BOTÓN RUTA ===== */
-    .btn-route {
-      margin-top: 6px;
-      background: var(--primary);
-      color: #fff;
-      border: none;
-      border-radius: 2rem;
-      padding: 0.15rem 0.6rem;
-      font-size: 0.65rem;
-      cursor: pointer;
-      width: 100%;
-      transition: var(--transition);
-    }
-    .btn-route:hover { background: var(--primary-hover); }
-
     /* ===== MODAL DE TOKEN MAPBOX ===== */
     .token-overlay {
       position: fixed; inset: 0; z-index: 99999;
@@ -435,19 +420,8 @@
         <option value="all">Ductos</option>
       </select>
     </div>
-    <!-- ===== NUEVO: Selector de perfil de ruta ===== -->
-    <div class="filters">
-      <select id="routeProfile" aria-label="Perfil de ruta">
-        <option value="car">🚗 Auto</option>
-        <option value="truck">🚛 Pesado</option>
-      </select>
-    </div>
     <button class="btn btn-secondary" id="toggleDuctosBtn" aria-label="Mostrar/ocultar ductos">
       <i class="fas fa-eye" id="ductosToggleIcon"></i> <span class="label">Ductos</span>
-    </button>
-    <!-- ===== NUEVO: Botón limpiar ruta ===== -->
-    <button class="btn" id="clearRouteBtn" title="Limpiar ruta" aria-label="Limpiar ruta">
-      <i class="fas fa-route"></i> <span class="label">Ruta</span>
     </button>
     <button class="btn btn-loc" id="locBtn" title="Centrar en mi ubicación" aria-label="Mi ubicación">
       <span class="loc-icon"><i class="fas fa-location-crosshairs"></i></span>
@@ -1050,6 +1024,27 @@
     }
   });
 
+  document.getElementById('centerDuctosBtn')?.addEventListener('click', function() {
+    if (!ductosData || ductosData.features.length === 0) {
+      map.flyTo([23.5, -102.5], 5);
+      return;
+    }
+    const bounds = new L.LatLngBounds();
+    ductosData.features.forEach(f => {
+      const coords = f.geometry.coordinates;
+      if (coords && coords.length) {
+        coords.forEach(coord => {
+          bounds.extend([coord[1], coord[0]]);
+        });
+      }
+    });
+    if (bounds.isValid()) {
+      map.flyToBounds(bounds, { padding: [60, 60], duration: 1.2 });
+    } else {
+      map.flyTo([23.5, -102.5], 5);
+    }
+  });
+
   // ============================================================
   //  6. ESTACIONES GNV (marcadores, clúster, filtros)
   // ============================================================
@@ -1089,7 +1084,6 @@
         icon: L.divIcon({ className: '', html: pinSVG(s.priceColor), iconSize: [24,34], iconAnchor: [12,34], popupAnchor: [0,-32] }),
         title: s.nombre
       });
-      // ===== POPUP CON BOTÓN DE RUTA =====
       marker.bindPopup(() => {
         const p = s.precio ? `$${s.precio.toFixed(2)} / litro` : 'Sin precio';
         return `<div style="padding:0.1rem;">
@@ -1099,7 +1093,6 @@
             <span style="display:block;width:8px;height:8px;border-radius:50%;background:${s.priceColor};"></span>
             <span style="color:#0f172a;font-weight:600;font-size:0.75rem;">${p}</span>
           </div>
-          <button class="btn-route" data-lat="${s.lat}" data-lon="${s.lon}">🚗 Calcular ruta</button>
         </div>`;
       }, { className: '', maxWidth: 220 });
       marker.data = s;
@@ -1279,111 +1272,7 @@
   });
 
   // ============================================================
-  //  10. RUTAS CON TOMTOM
-  // ============================================================
-  const TOMTOM_KEY = 'hE0LeSxEFnphnPKlqM9MxAxeHneGaLEA';
-  let rutaLayer = null;
-  let rutaMarcador = null;
-
-  function limpiarRuta() {
-    if (rutaLayer) { map.removeLayer(rutaLayer); rutaLayer = null; }
-    if (rutaMarcador) { map.removeLayer(rutaMarcador); rutaMarcador = null; }
-  }
-
-  async function calcularRuta(origenLat, origenLon, destinoLat, destinoLon, perfil = 'car') {
-    const travelMode = perfil === 'truck' ? 'truck' : 'car';
-    const url = `https://api.tomtom.com/routing/1/calculateRoute/${origenLat},${origenLon}:${destinoLat},${destinoLon}/json`;
-    const params = new URLSearchParams({
-      key: TOMTOM_KEY,
-      travelMode: travelMode,
-      routeType: 'fastest',
-      traffic: 'false'
-    });
-    if (perfil === 'truck') {
-      params.append('vehicleHeight', '4.2');
-      params.append('vehicleWeight', '40');
-    }
-    const fullUrl = `${url}?${params.toString()}`;
-    try {
-      const resp = await fetch(fullUrl);
-      if (!resp.ok) {
-        const errorText = await resp.text();
-        throw new Error(`TomTom error ${resp.status}: ${errorText}`);
-      }
-      const data = await resp.json();
-      if (!data.routes || !data.routes.length) {
-        throw new Error('No se encontró una ruta válida');
-      }
-      const ruta = data.routes[0];
-      const leg = ruta.legs[0];
-      const points = leg.points.map(p => [p.latitude, p.longitude]);
-      return {
-        distanciaKm: leg.summary.lengthInMeters / 1000,
-        duracionMin: leg.summary.travelTimeInSeconds / 60,
-        geometria: points
-      };
-    } catch (e) {
-      console.error('Error calculando ruta:', e);
-      alert(`Error al calcular la ruta: ${e.message}`);
-      return null;
-    }
-  }
-
-  async function mostrarRuta(destLat, destLon, perfil = 'car') {
-    limpiarRuta();
-    // Origen fijo: GNU MADRE
-    const origenLat = 19.7047816;
-    const origenLon = -101.244605;
-    const resultado = await calcularRuta(origenLat, origenLon, destLat, destLon, perfil);
-    if (!resultado) {
-      alert('No se pudo calcular la ruta. Intenta de nuevo.');
-      return;
-    }
-    const coords = resultado.geometria.map(c => [c[0], c[1]]);
-    rutaLayer = L.polyline(coords, {
-      color: '#1F5CA9',
-      weight: 3,
-      opacity: 0.8,
-      dashArray: '6,6'
-    }).addTo(map);
-    map.fitBounds(rutaLayer.getBounds(), { padding: [50, 50] });
-    rutaMarcador = L.marker([destLat, destLon], {
-      icon: L.divIcon({
-        className: '',
-        html: '<i class="fas fa-flag-checkered" style="font-size:24px;color:#1F5CA9;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));"></i>',
-        iconSize: [24, 24]
-      })
-    }).addTo(map);
-    const perfilLabel = perfil === 'truck' ? '🚛 Transporte pesado' : '🚗 Automóvil';
-    rutaMarcador.bindPopup(`
-      <strong>Ruta desde GNU MADRE</strong><br>
-      Distancia: ${resultado.distanciaKm.toFixed(1)} km<br>
-      Tiempo estimado: ${Math.round(resultado.duracionMin)} min<br>
-      <span style="font-size:0.6rem;color:var(--text-muted);">Perfil: ${perfilLabel}</span>
-    `).openPopup();
-  }
-
-  // Delegación de eventos para el botón de ruta dentro del popup
-  document.addEventListener('click', function(e) {
-    const btn = e.target.closest('.btn-route');
-    if (btn) {
-      e.stopPropagation();
-      const lat = parseFloat(btn.dataset.lat);
-      const lon = parseFloat(btn.dataset.lon);
-      if (isNaN(lat) || isNaN(lon)) {
-        alert('Coordenadas inválidas');
-        return;
-      }
-      const perfil = document.getElementById('routeProfile')?.value || 'car';
-      mostrarRuta(lat, lon, perfil);
-    }
-  });
-
-  // Botón para limpiar ruta
-  document.getElementById('clearRouteBtn')?.addEventListener('click', limpiarRuta);
-
-  // ============================================================
-  //  11. RECARGA DE DUCTOS Y ESTACIONES (desde localStorage)
+  //  10. RECARGA DE DUCTOS Y ESTACIONES (desde localStorage)
   // ============================================================
   function recargarDuctos() {
     const nuevoJS = localStorage.getItem('DUCTOS_JS');
@@ -1473,7 +1362,7 @@
   }
 
   // ============================================================
-  //  12. ESCUCHAR ACTUALIZACIONES DESDE LOCALSTORAGE
+  //  11. ESCUCHAR ACTUALIZACIONES DESDE LOCALSTORAGE
   // ============================================================
   window.addEventListener('storage', function(e) {
     if (e.key === 'DUCTOS_ACTUALIZADO') {
@@ -1486,7 +1375,7 @@
   });
 
   // ============================================================
-  //  13. INICIALIZACIÓN FINAL
+  //  12. INICIALIZACIÓN FINAL
   // ============================================================
   document.getElementById('rTotal').textContent = stations.length;
   document.getElementById('rGroups').textContent = grupos.length;
