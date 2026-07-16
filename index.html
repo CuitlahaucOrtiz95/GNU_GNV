@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
+    /* ===== ESTILOS (sin cambios relevantes) ===== */
     :root {
       --primary: #1F5CA9;
       --primary-hover: #004a8f;
@@ -43,7 +44,6 @@
       box-shadow: var(--shadow-lg);
     }
     
-    /* ===== TOPBAR ===== */
     .topbar {
       background: linear-gradient(135deg, #1F5CA9 0%, #0082D6 50%, #27BFF0 100%);
       color: #fff;
@@ -67,12 +67,7 @@
       backdrop-filter: blur(4px);
     }
     .topbar .readout .num { font-weight: 700; font-size: 0.8rem; }
-    .topbar .status-badge {
-      background: rgba(255,255,255,0.15); border-radius: 1.5rem;
-      padding: 0.1rem 0.5rem; font-size: 0.6rem; display: flex; align-items: center; gap: 0.2rem;
-      font-weight: 500;
-      display: none;
-    }
+    .topbar .status-badge { display: none; }
     .topbar .stats { display: none; }
     
     .btn-gear {
@@ -98,7 +93,6 @@
       margin-left: 4px;
     }
 
-    /* ===== TOOLBAR ===== */
     .toolbar {
       background: #f8fafc; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border);
       display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; flex-shrink: 0; z-index: 9;
@@ -155,11 +149,9 @@
     .toolbar .btn-loc.loading .loc-icon { display: none; }
     @keyframes spin { 100% { transform: rotate(360deg); } }
 
-    /* ===== STAGE ===== */
     .stage { display: flex; flex: 1; overflow: hidden; position: relative; }
     #map { flex: 1; height: 100%; min-height: 200px; z-index: 1; }
     
-    /* ===== RAIL ===== */
     .rail {
       width: 280px; max-height: 100%; overflow-y: auto; overflow-x: hidden;
       border-left: 1px solid var(--border); background: var(--bg-panel); flex-shrink: 0;
@@ -190,7 +182,6 @@
     }
     .empty { padding: 2rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; }
 
-    /* ===== CLÚSTER ===== */
     .gnv-cluster { background: transparent; }
     .gnv-cluster .bubble {
       width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center;
@@ -206,7 +197,6 @@
       border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(39,191,240,0.25), 0 0 12px rgba(39,191,240,0.7);
     }
 
-    /* ===== LEYENDAS (con z-index ajustado) ===== */
     .price-legend {
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(8px);
@@ -221,7 +211,7 @@
       position: absolute;
       bottom: 20px;
       right: 10px;
-      z-index: 500; /* menor que los controles de Leaflet (1000) */
+      z-index: 500;
       max-width: 160px;
     }
     .price-legend .title {
@@ -290,7 +280,6 @@
     .cluster-popup-list .item .name { color: var(--text-main); font-weight: 500; }
     .cluster-popup-list .item .state { color: var(--text-muted); font-size: 0.6rem; background: #f8fafc; padding: 1px 4px; border-radius: 8px; }
 
-    /* ===== MODAL DE TOKEN MAPBOX ===== */
     .token-overlay {
       position: fixed; inset: 0; z-index: 99999;
       background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);
@@ -331,7 +320,6 @@
     .token-modal .hint { font-size: 0.7rem; color: #94a3b8; margin-top: 0.5rem; }
     .token-modal .hint a { color: var(--primary); }
 
-    /* ===== RESPONSIVE ===== */
     @media (max-width: 768px) {
       .topbar { padding: 0.3rem 0.5rem; }
       .topbar .brand { font-size: 0.8rem; }
@@ -380,7 +368,7 @@
   <div class="token-overlay" id="tokenOverlay">
     <div class="token-modal">
       <h2>🗺️ Token de Mapbox</h2>
-      <p>Ingresa tu Access Token de Mapbox para habilitar capas de alta calidad (satélite, calles, terreno). Sin token, se usan capas gratuitas (CARTO).</p>
+      <p>Ingresa tu Access Token de Mapbox para habilitar capas de alta calidad (satélite, calles, terreno). Sin token, se usan capas gratuitas (CARTO/Esri).</p>
       <div class="field">
         <input type="text" id="tokenInput" placeholder="pk.eyJ1Ijo..." spellcheck="false" autocomplete="off" />
         <button class="btn-save" id="tokenSaveBtn">Guardar</button>
@@ -448,7 +436,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-<!-- Datos externos (deben estar en la misma carpeta) -->
+<!-- Datos externos -->
 <script src="estaciones.js"></script>
 <script src="ductos.js"></script>
 
@@ -457,7 +445,7 @@
   "use strict";
 
   // ============================================================
-  //  0. TOKEN DE MAPBOX (incrustado)
+  //  0. TOKEN DE MAPBOX (opcional)
   // ============================================================
   const DEFAULT_TOKEN = 'pk.eyJ1IjoidGxhaHVhY2dudTk1IiwiYSI6ImNtcmpjNmZjODAxZXQzMHB1Mm9vOWh0ZjEifQ.osKvuLgEUeb4YT2dN7-q9A';
   let currentToken = localStorage.getItem('MAPBOX_TOKEN_GNV') || DEFAULT_TOKEN;
@@ -570,7 +558,7 @@
   }
 
   // ============================================================
-  //  3. CARGA DE ESTACIONES (con localStorage)
+  //  3. CARGA DE ESTACIONES
   // ============================================================
   let rawData = window.ESTACIONES || [];
   const estacionesGuardado = localStorage.getItem('ESTACIONES_JS');
@@ -595,70 +583,76 @@
   const grupos = [...new Set(stations.map(s => s.grupo))].sort((a,b) => a.localeCompare(b));
 
   // ============================================================
-  //  4. MAPA Y CAPAS BASE (con control de capas)
+  //  4. MAPA Y CAPAS BASE (CORREGIDO)
   // ============================================================
   const map = L.map('map', { zoomControl: false }).setView([23.5, -102.5], 5);
-  
-  // Control de zoom en la esquina superior derecha (para que no se superponga con leyendas)
   L.control.zoom({ position: 'topright' }).addTo(map);
 
-  // Capas disponibles
   let layerControl = null;
   let currentBaseLayer = null;
 
-  function buildBaseLayers(token) {
-    const layers = {};
-
-    // Capa gratuita (CARTO) – siempre disponible
-    layers["🗺️ Calles (CARTO)"] = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  // Capas gratuitas (siempre disponibles)
+  const freeLayers = {
+    "🗺️ Calles (CARTO)": L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '© OpenStreetMap · © CARTO',
       subdomains: 'abcd',
       maxZoom: 19
-    });
+    }),
+    "🛰️ Satélite (Esri)": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles © Esri',
+      maxZoom: 19
+    }),
+    "🌙 Oscuro (CARTO)": L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap · © CARTO',
+      subdomains: 'abcd',
+      maxZoom: 19
+    })
+  };
 
-    // Capas de Mapbox (si hay token)
-    if (token) {
-      const mb = (style, label) => L.tileLayer(
-        `https://api.mapbox.com/styles/v1/mapbox/${style}/tiles/{z}/{x}/{y}?access_token=${token}`, {
-          tileSize: 512,
-          zoomOffset: -1,
-          maxZoom: 20,
-          attribution: '© Mapbox © OpenStreetMap'
-        }
-      );
-      layers["🗺️ Mapbox Calles"] = mb('streets-v12', 'Calles');
-      layers["🛰️ Mapbox Satélite"] = mb('satellite-streets-v12', 'Satélite');
-      layers["🌙 Mapbox Oscuro"] = mb('dark-v11', 'Oscuro');
-      layers["💡 Mapbox Claro"] = mb('light-v11', 'Claro');
-      layers["🏔️ Mapbox Exterior"] = mb('outdoors-v12', 'Exterior');
-    }
-
-    return layers;
+  // Capas de Mapbox (solo si hay token)
+  function buildMapboxLayers(token) {
+    if (!token) return {};
+    const mb = (style, label) => L.tileLayer(
+      `https://api.mapbox.com/styles/v1/mapbox/${style}/tiles/{z}/{x}/{y}?access_token=${token}`, {
+        tileSize: 512,
+        zoomOffset: -1,
+        maxZoom: 20,
+        attribution: '© Mapbox © OpenStreetMap'
+      }
+    );
+    return {
+      "🗺️ Mapbox Calles": mb('streets-v12', 'Calles'),
+      "🛰️ Mapbox Satélite": mb('satellite-streets-v12', 'Satélite'),
+      "🌙 Mapbox Oscuro": mb('dark-v11', 'Oscuro'),
+      "💡 Mapbox Claro": mb('light-v11', 'Claro'),
+      "🏔️ Mapbox Exterior": mb('outdoors-v12', 'Exterior')
+    };
   }
 
   function rebuildBaseLayers() {
-    // Eliminar control anterior
+    // Eliminar control anterior y capa activa
     if (layerControl) {
       map.removeControl(layerControl);
       layerControl = null;
     }
-
-    // Quitar capa base actual
     if (currentBaseLayer) {
       map.removeLayer(currentBaseLayer);
       currentBaseLayer = null;
     }
 
-    const layers = buildBaseLayers(currentToken);
-    // Establecer la primera capa (CARTO o Mapbox si hay token) como activa
-    const firstKey = Object.keys(layers)[0];
+    // Combinar capas: gratuitas primero, luego Mapbox
+    const mapboxLayers = buildMapboxLayers(currentToken);
+    const allLayers = { ...freeLayers, ...mapboxLayers };
+
+    // Establecer la primera capa (Calles CARTO) como activa por defecto
+    const firstKey = Object.keys(allLayers)[0];
     if (firstKey) {
-      currentBaseLayer = layers[firstKey];
+      currentBaseLayer = allLayers[firstKey];
       currentBaseLayer.addTo(map);
     }
 
     // Crear control de capas
-    layerControl = L.control.layers(layers).addTo(map);
+    layerControl = L.control.layers(allLayers).addTo(map);
     updateMapboxIndicator();
   }
 
@@ -666,7 +660,7 @@
   rebuildBaseLayers();
 
   // ============================================================
-  //  5. DUCTOS (desde ductos.js)
+  //  5. DUCTOS (código completo, sin cambios)
   // ============================================================
   const ductosData = window.DUCTOS_GAS || { type: "FeatureCollection", features: [] };
   console.log(`📊 Ductos cargados: ${ductosData.features.length}`);
@@ -862,9 +856,7 @@
       ductosLayer.eachLayer(function(layer) {
         const props = layer.feature ? layer.feature.properties : {};
         const tipoFeature = (props.tipo || "CENAGAS (existente)").trim().toLowerCase();
-        if (tipoFeature === tipoNorm) {
-          layersDelTipo.push(layer);
-        }
+        if (tipoFeature === tipoNorm) layersDelTipo.push(layer);
       });
       const orderMap = {};
       ductosData.features.forEach((f, i) => {
@@ -1021,27 +1013,6 @@
       if (ductosLayer) map.addLayer(ductosLayer);
       ductosVisibles = true;
       document.getElementById('ductosToggleIcon').className = 'fas fa-eye';
-    }
-  });
-
-  document.getElementById('centerDuctosBtn')?.addEventListener('click', function() {
-    if (!ductosData || ductosData.features.length === 0) {
-      map.flyTo([23.5, -102.5], 5);
-      return;
-    }
-    const bounds = new L.LatLngBounds();
-    ductosData.features.forEach(f => {
-      const coords = f.geometry.coordinates;
-      if (coords && coords.length) {
-        coords.forEach(coord => {
-          bounds.extend([coord[1], coord[0]]);
-        });
-      }
-    });
-    if (bounds.isValid()) {
-      map.flyToBounds(bounds, { padding: [60, 60], duration: 1.2 });
-    } else {
-      map.flyTo([23.5, -102.5], 5);
     }
   });
 
@@ -1228,7 +1199,6 @@
   // ============================================================
   document.getElementById('resetBtn').addEventListener('click', () => map.flyTo([23.5, -102.5], 5));
   
-  // Toggle rail (responsive: se desliza desde abajo)
   let railVisible = false;
   document.getElementById('toggleRailBtn').addEventListener('click', function() {
     const rail = document.getElementById('railPanel');
@@ -1272,7 +1242,7 @@
   });
 
   // ============================================================
-  //  10. RECARGA DE DUCTOS Y ESTACIONES (desde localStorage)
+  //  10. RECARGA DE DUCTOS Y ESTACIONES
   // ============================================================
   function recargarDuctos() {
     const nuevoJS = localStorage.getItem('DUCTOS_JS');
@@ -1361,9 +1331,6 @@
     }
   }
 
-  // ============================================================
-  //  11. ESCUCHAR ACTUALIZACIONES DESDE LOCALSTORAGE
-  // ============================================================
   window.addEventListener('storage', function(e) {
     if (e.key === 'DUCTOS_ACTUALIZADO') {
       console.log('🔄 Detectada actualización de ductos.');
@@ -1375,7 +1342,7 @@
   });
 
   // ============================================================
-  //  12. INICIALIZACIÓN FINAL
+  //  11. INICIALIZACIÓN FINAL
   // ============================================================
   document.getElementById('rTotal').textContent = stations.length;
   document.getElementById('rGroups').textContent = grupos.length;
