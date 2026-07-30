@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    /* ===== ESTILOS BASE ===== */
+    /* ===== ESTILOS (sin cambios relevantes) ===== */
     :root {
       --primary: #1F5CA9;
       --primary-hover: #004a8f;
@@ -273,29 +273,7 @@
     }
     .ducto-legend .reset-btn:hover { color: #ef4444; }
 
-    /* 🛠️ NUEVO: Estilos para los popups y botones de acción */
     .leaflet-popup-content { font-size: 0.75rem; font-family: 'Inter', sans-serif; margin: 8px; }
-    .popup-actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
-      margin-top: 8px;
-    }
-    .popup-actions .popup-btn {
-      text-align: center; white-space: nowrap; text-decoration: none;
-      border: none; border-radius: 2rem; padding: 0.3rem 0.5rem;
-      font-size: 0.65rem; font-weight: 600; cursor: pointer; color: #fff;
-      transition: transform 0.12s ease, filter 0.12s ease;
-      display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem;
-    }
-    .popup-actions .popup-btn:hover { transform: translateY(-1px); filter: brightness(0.9); }
-    .popup-actions .popup-btn:active { transform: scale(0.95); }
-    .popup-actions .btn-maps { background: #475569; }
-    .popup-actions .btn-route { background: var(--primary); }
-    .popup-actions .btn-route-prospeccion { background: #059669; }
-    .popup-actions .btn-geocode { background: #10b981; }
-    .popup-actions .popup-btn.wide { grid-column: 1 / -1; }
-
     .cluster-popup-list { max-height: 150px; overflow-y: auto; padding-right: 4px; }
     .cluster-popup-list .item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.7rem; }
     .cluster-popup-list .item:last-child { border-bottom: none; }
@@ -458,9 +436,9 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-<!-- Datos externos (cargados con defer para no bloquear) -->
-<script defer src="estaciones.js"></script>
-<script defer src="ductos.js"></script>
+<!-- Datos externos -->
+<script src="estaciones.js"></script>
+<script src="ductos.js"></script>
 
 <script>
 (function(){
@@ -1079,8 +1057,6 @@
       });
       marker.bindPopup(() => {
         const p = s.precio ? `$${s.precio.toFixed(2)} / litro` : 'Sin precio';
-        const sinDir = !s.direccion ? 'Sin dirección' : s.direccion;
-        // 🛠️ Nuevo HTML con botones de acción
         return `<div style="padding:0.1rem;">
           <strong style="font-size:0.9rem;color:var(--primary);">${s.nombre}</strong><br>
           <span style="color:var(--text-muted);font-size:0.7rem;">${s.grupo} · ${s.estado || '...'}</span><br>
@@ -1088,14 +1064,8 @@
             <span style="display:block;width:8px;height:8px;border-radius:50%;background:${s.priceColor};"></span>
             <span style="color:#0f172a;font-weight:600;font-size:0.75rem;">${p}</span>
           </div>
-          <div class="popup-actions">
-            <a class="popup-btn btn-maps" href="https://www.google.com/maps?q=${s.lat},${s.lon}" target="_blank">🗺️ Maps</a>
-            <button class="popup-btn btn-route" data-lat="${s.lat}" data-lon="${s.lon}">🚗 Ruta</button>
-            <button class="popup-btn btn-route-prospeccion wide" data-lat="${s.lat}" data-lon="${s.lon}">🧭 Prospección</button>
-            ${sinDir ? `<button class="popup-btn btn-geocode wide" data-lat="${s.lat}" data-lon="${s.lon}" data-nombre="${s.nombre}">📍 Obtener dirección</button>` : ''}
-          </div>
         </div>`;
-      }, { className: '', maxWidth: 240 });
+      }, { className: '', maxWidth: 220 });
       marker.data = s;
       markerMap.set(s, { marker, data: s });
       cluster.addLayer(marker);
@@ -1225,153 +1195,7 @@
   }
 
   // ============================================================
-  //  9. 🛠️ ACCIONES: GEOCODIFICACIÓN, RUTA Y MAPS
-  // ============================================================
-
-  // --- Geolocalización y Dirección ---
-  async function geocodeCliente(cliente) {
-    const url = `https://nominatim.openstreetmap.org/reverse?lat=${cliente.lat}&lon=${cliente.lon}&format=json&zoom=16&addressdetails=1`;
-    try {
-      const resp = await fetch(url, { headers: { 'User-Agent': 'PetroIntelligence/1.0' } });
-      if (!resp.ok) return null;
-      const data = await resp.json();
-      return data?.display_name ? { direccion: data.display_name, estado: data.address?.state || '' } : null;
-    } catch (e) { return null; }
-  }
-
-  // --- Lógica de Rutas ---
-  const ANCLA_MORELIA = { nombre: "Morelia", lat: 19.70480534245386, lon: -101.24479193126763 };
-  let rutaLayer = null;
-  let rutaMarcador = null;
-  let rutaActiva = false;
-
-  async function calcularRuta(origenLat, origenLon, destinoLat, destinoLon) {
-    const url = `https://router.project-osrm.org/route/v1/driving/${origenLon},${origenLat};${destinoLon},${destinoLat}?overview=full&geometries=geojson`;
-    try {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error('Error en OSRM');
-      const data = await resp.json();
-      if (data.code !== 'Ok') throw new Error('Ruta no encontrada');
-      const ruta = data.routes[0];
-      return { distanciaKm: ruta.distance / 1000, duracionMin: ruta.duration / 60, geometria: ruta.geometry.coordinates };
-    } catch (e) { 
-      console.error('Error calculando ruta:', e); 
-      return null; 
-    }
-  }
-
-  function limpiarRuta() {
-    if (rutaLayer) { map.removeLayer(rutaLayer); rutaLayer = null; }
-    if (rutaMarcador) { map.removeLayer(rutaMarcador); rutaMarcador = null; }
-    if (rutaActiva) {
-      rutaActiva = false;
-      if (!map.hasLayer(cluster)) map.addLayer(cluster);
-      if (ductosLayer && !map.hasLayer(ductosLayer) && ductosVisibles) map.addLayer(ductosLayer);
-      applyFilters();
-      map.invalidateSize();
-    }
-  }
-
-  async function dibujarRuta(origen, destLat, destLon, color) {
-    if (rutaActiva) limpiarRuta();
-    color = color || '#1F5CA9';
-
-    const resultado = await calcularRuta(origen.lat, origen.lon, destLat, destLon);
-    if (!resultado) { alert('No se pudo calcular la ruta.'); return; }
-    const coords = resultado.geometria.map(c => [c[1], c[0]]);
-
-    // Ocultar clústeres y ductos para una mejor visualización de la ruta
-    if (map.hasLayer(cluster)) map.removeLayer(cluster);
-    if (map.hasLayer(ductosLayer) && ductosVisibles) map.removeLayer(ductosLayer);
-
-    const casing = L.polyline(coords, { color: '#ffffff', weight: 9, opacity: 0.95, className: 'route-casing' });
-    const main   = L.polyline(coords, { color, weight: 5, opacity: 0.95, className: 'route-main' });
-    rutaLayer = L.layerGroup([casing, main]).addTo(map);
-    map.fitBounds(rutaLayer.getBounds(), { padding: [50,50], duration: 1.2 });
-    
-    rutaMarcador = L.marker([destLat, destLon], {
-      icon: L.divIcon({ className: '', html: `<i class="fas fa-flag-checkered" style="font-size:28px;color:${color};filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));"></i>`, iconSize: [28,28] })
-    }).addTo(map);
-    rutaMarcador.bindPopup(`<strong>Ruta desde ${origen.nombre}</strong><br>Distancia: ${resultado.distanciaKm.toFixed(1)} km<br>Tiempo: ${Math.round(resultado.duracionMin)} min`).openPopup();
-    rutaActiva = true;
-  }
-
-  async function mostrarRuta(destLat, destLon) {
-    await dibujarRuta(ANCLA_MORELIA, destLat, destLon);
-  }
-
-  async function mostrarRutaProspeccion(destLat, destLon) {
-    if (!miUbicacionCoords) {
-      alert('Primero activa tu ubicación con el botón "Mi ubicación" (GPS).');
-      return;
-    }
-    const origen = { lat: miUbicacionCoords.lat, lon: miUbicacionCoords.lon, nombre: 'tu ubicación' };
-    await dibujarRuta(origen, destLat, destLon, '#059669');
-  }
-
-  // Escuchadores de eventos para los botones del popup
-  document.addEventListener('click', function(e) {
-    // Botón de Maps (ya es un enlace directo)
-    // Botón de Ruta
-    if (e.target.closest('.btn-route')) {
-      const btn = e.target.closest('.btn-route');
-      const lat = parseFloat(btn.dataset.lat);
-      const lon = parseFloat(btn.dataset.lon);
-      map.closePopup();
-      mostrarRuta(lat, lon);
-    }
-    // Botón de Prospección
-    else if (e.target.closest('.btn-route-prospeccion')) {
-      const btn = e.target.closest('.btn-route-prospeccion');
-      const lat = parseFloat(btn.dataset.lat);
-      const lon = parseFloat(btn.dataset.lon);
-      map.closePopup();
-      mostrarRutaProspeccion(lat, lon);
-    }
-    // Botón de Geocodificación (Dirección)
-    else if (e.target.closest('.btn-geocode')) {
-      const btn = e.target.closest('.btn-geocode');
-      const lat = parseFloat(btn.dataset.lat);
-      const lon = parseFloat(btn.dataset.lon);
-      const nombre = btn.dataset.nombre;
-      
-      const cliente = stations.find(s => s.lat === lat && s.lon === lon && s.nombre === nombre);
-      if (!cliente) return;
-      
-      // Comprobar si ya tiene dirección
-      if (cliente.direccion) return alert(`Dirección: ${cliente.direccion}`);
-
-      geocodeCliente(cliente).then(result => {
-        if (result) {
-          cliente.direccion = result.direccion;
-          cliente.estado = result.estado || cliente.estado;
-          map.closePopup();
-          // Abrir de nuevo el popup con la dirección actualizada
-          const entry = markerMap.get(cliente);
-          if (entry) {
-            entry.marker.openPopup();
-          }
-          // Guardar en localStorage
-          try {
-            const estacionesStr = JSON.stringify(stations);
-            localStorage.setItem('ESTACIONES_JS', `window.ESTACIONES = ${estacionesStr};`);
-          } catch (e) {
-            if(e.name === 'QuotaExceededError') alert('Almacenamiento lleno.');
-          }
-        } else {
-          alert('No se pudo obtener la dirección para estas coordenadas.');
-        }
-      });
-    }
-  });
-
-  // Limpiar ruta al hacer clic en el mapa
-  map.on('click', function() {
-    limpiarRuta();
-  });
-
-  // ============================================================
-  //  10. CONTROLES ADICIONALES
+  //  9. CONTROLES ADICIONALES
   // ============================================================
   document.getElementById('resetBtn').addEventListener('click', () => map.flyTo([23.5, -102.5], 5));
   
@@ -1402,16 +1226,14 @@
     }
   });
 
-  let miUbicacionCoords = null;
   const locBtn = document.getElementById('locBtn');
   let locMarker, locCircle;
   locBtn.addEventListener('click', function() {
-    if (locMarker) { map.removeLayer(locMarker); map.removeLayer(locCircle); locMarker=null; miUbicacionCoords=null; map.flyTo([23.5, -102.5], 5); return; }
+    if (locMarker) { map.removeLayer(locMarker); map.removeLayer(locCircle); locMarker=null; map.flyTo([23.5, -102.5], 5); return; }
     if (!navigator.geolocation) return alert('Geolocalización no soportada.');
     locBtn.classList.add('loading');
     navigator.geolocation.getCurrentPosition(pos => {
       const { latitude, longitude, accuracy } = pos.coords;
-      miUbicacionCoords = { lat: latitude, lon: longitude };
       map.flyTo([latitude, longitude], 13);
       locMarker = L.marker([latitude, longitude], { icon: L.divIcon({ className: 'location-marker', html: '<div class="dot"></div>', iconSize: [18,18] }) }).addTo(map);
       locCircle = L.circle([latitude, longitude], { radius: accuracy, color: 'var(--secondary)', weight: 1 }).addTo(map);
@@ -1420,7 +1242,7 @@
   });
 
   // ============================================================
-  //  11. RECARGA DE DUCTOS Y ESTACIONES
+  //  10. RECARGA DE DUCTOS Y ESTACIONES
   // ============================================================
   function recargarDuctos() {
     const nuevoJS = localStorage.getItem('DUCTOS_JS');
@@ -1520,7 +1342,7 @@
   });
 
   // ============================================================
-  //  12. INICIALIZACIÓN FINAL
+  //  11. INICIALIZACIÓN FINAL
   // ============================================================
   document.getElementById('rTotal').textContent = stations.length;
   document.getElementById('rGroups').textContent = grupos.length;
