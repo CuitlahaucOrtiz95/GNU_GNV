@@ -558,18 +558,27 @@
   }
 
   // ============================================================
-  //  3. CARGA DE ESTACIONES
+  //  3. CARGA DE ESTACIONES (CORREGIDO para leer correctamente const/let)
   // ============================================================
-  let rawData = window.ESTACIONES || [];
-  const estacionesGuardado = localStorage.getItem('ESTACIONES_JS');
-  if (estacionesGuardado) {
-    try {
-      eval(estacionesGuardado);
-      rawData = window.ESTACIONES || [];
-      console.log('✅ Estaciones cargadas desde localStorage');
-    } catch (e) {
-      console.warn('Error al evaluar ESTACIONES_JS:', e);
+  // Ahora revisa la variable global ESTACIONES directamente, no la propiedad window.ESTACIONES
+  let rawData = (typeof ESTACIONES !== 'undefined' ? ESTACIONES : []);
+
+  // Si no hay datos, intentar desde localStorage (caché)
+  if (!rawData || rawData.length === 0) {
+    const estacionesGuardado = localStorage.getItem('ESTACIONES_JS');
+    if (estacionesGuardado) {
+      try {
+        eval(estacionesGuardado);
+        rawData = (typeof ESTACIONES !== 'undefined' ? ESTACIONES : []);
+        console.log('🔄 Estaciones cargadas desde localStorage (copia de seguridad)');
+      } catch (e) {
+        console.warn('Error al evaluar ESTACIONES_JS:', e);
+      }
     }
+  }
+
+  if (!rawData || rawData.length === 0) {
+    console.warn('⚠️ No se encontraron estaciones. Revisa que estaciones.js esté en la misma carpeta y que la variable se llame ESTACIONES.');
   }
 
   let stations = deduplicate(rawData);
@@ -583,7 +592,7 @@
   const grupos = [...new Set(stations.map(s => s.grupo))].sort((a,b) => a.localeCompare(b));
 
   // ============================================================
-  //  4. MAPA Y CAPAS BASE (CORREGIDO)
+  //  4. MAPA Y CAPAS BASE
   // ============================================================
   const map = L.map('map', { zoomControl: false }).setView([23.5, -102.5], 5);
   L.control.zoom({ position: 'topright' }).addTo(map);
@@ -630,7 +639,6 @@
   }
 
   function rebuildBaseLayers() {
-    // Eliminar control anterior y capa activa
     if (layerControl) {
       map.removeControl(layerControl);
       layerControl = null;
@@ -640,29 +648,51 @@
       currentBaseLayer = null;
     }
 
-    // Combinar capas: gratuitas primero, luego Mapbox
     const mapboxLayers = buildMapboxLayers(currentToken);
     const allLayers = { ...freeLayers, ...mapboxLayers };
 
-    // Establecer la primera capa (Calles CARTO) como activa por defecto
     const firstKey = Object.keys(allLayers)[0];
     if (firstKey) {
       currentBaseLayer = allLayers[firstKey];
       currentBaseLayer.addTo(map);
     }
 
-    // Crear control de capas
     layerControl = L.control.layers(allLayers).addTo(map);
     updateMapboxIndicator();
   }
 
-  // Inicializar capas
   rebuildBaseLayers();
 
   // ============================================================
-  //  5. DUCTOS (código completo, sin cambios)
+  //  5. DUCTOS (CORREGIDO para leer correctamente const/let)
   // ============================================================
-  const ductosData = window.DUCTOS_GAS || { type: "FeatureCollection", features: [] };
+  // Ahora revisa DUCTOS_GAS, no window.DUCTOS_GAS
+  let ductosData = { type: "FeatureCollection", features: [] };
+
+  if (typeof DUCTOS_GAS !== 'undefined' && DUCTOS_GAS.features) {
+    ductosData = DUCTOS_GAS;
+  }
+
+  // Si no hay datos, intentar desde localStorage (caché)
+  if (!ductosData || !ductosData.features || ductosData.features.length === 0) {
+    const ductosGuardado = localStorage.getItem('DUCTOS_JS');
+    if (ductosGuardado) {
+      try {
+        eval(ductosGuardado);
+        if (typeof DUCTOS_GAS !== 'undefined') {
+          ductosData = DUCTOS_GAS;
+          console.log('🔄 Ductos cargados desde localStorage (copia de seguridad)');
+        }
+      } catch (e) {
+        console.warn('Error al evaluar DUCTOS_JS:', e);
+      }
+    }
+  }
+
+  if (!ductosData || !ductosData.features || ductosData.features.length === 0) {
+    console.warn('⚠️ No se encontraron ductos. Revisa que ductos.js esté en la misma carpeta y que la variable se llame DUCTOS_GAS.');
+  }
+
   console.log(`📊 Ductos cargados: ${ductosData.features.length}`);
 
   const DUCTO_ESTILOS = {
@@ -1242,39 +1272,21 @@
   });
 
   // ============================================================
-  //  10. RECARGA DE DUCTOS Y ESTACIONES
+  //  10. RECARGA DE DUCTOS Y ESTACIONES (CORREGIDO)
   // ============================================================
   function recargarDuctos() {
     const nuevoJS = localStorage.getItem('DUCTOS_JS');
     if (!nuevoJS) return;
     try {
       eval(nuevoJS);
-      if (window.DUCTOS && Array.isArray(window.DUCTOS)) {
-        const geojson = {
-          type: "FeatureCollection",
-          features: window.DUCTOS.map(d => ({
-            type: "Feature",
-            properties: {
-              nombre: d.nombre || "Ducto",
-              tipo: d.grupo || "Gasoducto privado",
-              precio: d.precio,
-              estado: d.estado || "",
-              lat_inicio: d.lat_inicio,
-              lon_inicio: d.lon_inicio,
-              lat_fin: d.lat_fin,
-              lon_fin: d.lon_fin
-            },
-            geometry: {
-              type: "LineString",
-              coordinates: [
-                [d.lon_inicio, d.lat_inicio],
-                [d.lon_fin, d.lat_fin]
-              ]
-            }
-          }))
-        };
-        window.DUCTOS_GAS = geojson;
-        ductosData = geojson;
+      // Leer la variable global, incluso si es const
+      let nuevoDuctosData = { type: "FeatureCollection", features: [] };
+      if (typeof DUCTOS_GAS !== 'undefined' && DUCTOS_GAS.features) {
+        nuevoDuctosData = DUCTOS_GAS;
+      }
+      
+      if (nuevoDuctosData.features && nuevoDuctosData.features.length > 0) {
+        ductosData = nuevoDuctosData;
         crearCapaDuctos(ductosData);
         poblarFiltroDuctos(ductosData);
         actualizarLeyendaDuctos(ductosData);
@@ -1296,7 +1308,10 @@
     if (!nuevoJS) return;
     try {
       eval(nuevoJS);
-      const nuevos = window.ESTACIONES || [];
+      // Leer la variable global, incluso si es const
+      const nuevos = (typeof ESTACIONES !== 'undefined' ? ESTACIONES : []);
+      if (nuevos.length === 0) return;
+
       stations.length = 0;
       stations.push(...deduplicate(nuevos));
       stations.forEach(s => {
