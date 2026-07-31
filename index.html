@@ -199,7 +199,6 @@
     .ducto-legend .reset-btn { background: none; border: none; color: var(--text-muted); font-size: 8px; cursor: pointer; padding: 0 2px; }
     .ducto-legend .reset-btn:hover { color: #ef4444; }
 
-    /* 🆕 Estilo mínimo para el botón de ruta */
     .popup-actions { margin-top: 8px; }
     .popup-btn {
       display: block; width: 100%; padding: 6px 12px; border-radius: 20px;
@@ -347,6 +346,12 @@
     <button class="btn btn-toggle-rail" id="toggleRailBtn" title="Mostrar/ocultar directorio" aria-label="Directorio">
       <i class="fas fa-list" id="railToggleIcon"></i> <span class="label">Directorio</span>
     </button>
+    
+    <!-- 🆕 NUEVO: Botón para limpiar la ruta -->
+    <button class="btn btn-danger" id="clearRouteBtn" title="Eliminar ruta del mapa" aria-label="Limpiar ruta">
+      <i class="fas fa-route"></i> <span class="label">Limpiar ruta</span>
+    </button>
+
     <button class="btn btn-clear-all hidden" id="clearAllBtn" title="Limpiar todos los filtros" aria-label="Limpiar filtros">
       <i class="fas fa-times"></i> <span class="label">Limpiar</span>
     </button>
@@ -789,8 +794,22 @@
   crearCapaDuctos(ductosData); poblarFiltroDuctos(ductosData); agregarLeyendaDuctos();
   document.getElementById('ductoFilter').addEventListener('change', function() { aplicarFiltroIterativo(this.value); });
   document.getElementById('toggleDuctosBtn').addEventListener('click', function() {
-    if (ductosVisibles) { if (ductosLayer) map.removeLayer(ductosLayer); ductosVisibles = false; document.getElementById('ductosToggleIcon').className = 'fas fa-eye-slash'; }
-    else { if (ductosLayer) map.addLayer(ductosLayer); ductosVisibles = true; document.getElementById('ductosToggleIcon').className = 'fas fa-eye'; }
+    if (ductosVisibles) {
+      // Si la ruta está activa, la capa ya no está en el mapa. Solo cambiamos la variable de estado y el icono.
+      ductosVisibles = false;
+      document.getElementById('ductosToggleIcon').className = 'fas fa-eye-slash';
+      // Si la ruta NO está activa y la capa existe en el mapa, la eliminamos.
+      if (!rutaActiva && ductosLayer && map.hasLayer(ductosLayer)) {
+        map.removeLayer(ductosLayer);
+      }
+    } else {
+      ductosVisibles = true;
+      document.getElementById('ductosToggleIcon').className = 'fas fa-eye';
+      // Añadimos la capa de ductos si no está activa la ruta y no está en el mapa.
+      if (!rutaActiva && ductosLayer && !map.hasLayer(ductosLayer)) {
+        map.addLayer(ductosLayer);
+      }
+    }
   });
 
   // ============================================================
@@ -828,7 +847,6 @@
         title: s.nombre
       });
       
-      // 🆕 AQUÍ SE AGREGA EL BOTÓN DE RUTA EN EL POPUP
       marker.bindPopup(() => {
         const p = s.precio ? `$${s.precio.toFixed(2)} / litro` : 'Sin precio';
         return `<div style="padding:0.1rem;">
@@ -919,6 +937,7 @@
   });
 
   document.getElementById('clearAllBtn').addEventListener('click', () => {
+    limpiarRuta(); // 🆕 Limpiar ruta al limpiar filtros
     activePrice = null; searchTerm = '';
     filterSelect.value = 'all'; document.getElementById('stateFilter').value = 'all';
     document.getElementById('searchInput').value = '';
@@ -979,7 +998,7 @@
   });
 
   // ============================================================
-  //  10. 🆕 NUEVO: LÓGICA DE RUTA DESDE MORELIA
+  //  10. LÓGICA DE RUTA DESDE MORELIA (CORREGIDA)
   // ============================================================
   const ANCLA_MORELIA = { nombre: "Morelia", lat: 19.70480534245386, lon: -101.24479193126763 };
   let rutaLayer = null;
@@ -999,23 +1018,25 @@
 
   function limpiarRuta() {
     if (rutaLayer) { map.removeLayer(rutaLayer); rutaLayer = null; }
-    if (rutaActiva) {
-      rutaActiva = false;
-      if (!map.hasLayer(cluster)) map.addLayer(cluster);
-      if (ductosLayer && !map.hasLayer(ductosLayer) && ductosVisibles) map.addLayer(ductosLayer);
-      applyFilters();
-      map.invalidateSize();
-    }
+    rutaActiva = false;
+    
+    // 🛠️ CORRECCIÓN: Asegurar que el clúster de estaciones y los ductos vuelvan al mapa
+    if (!map.hasLayer(cluster)) map.addLayer(cluster);
+    if (ductosLayer && !map.hasLayer(ductosLayer) && ductosVisibles) map.addLayer(ductosLayer);
+    
+    applyFilters();
+    map.invalidateSize();
   }
 
   async function dibujarRuta(origen, destLat, destLon, color) {
-    if (rutaActiva) limpiarRuta();
+    limpiarRuta(); // Limpiamos la ruta previa antes de dibujar una nueva
     color = color || '#1F5CA9';
 
     const resultado = await calcularRuta(origen.lat, origen.lon, destLat, destLon);
     if (!resultado) { alert('No se pudo calcular la ruta.'); return; }
     const coords = resultado.geometria.map(c => [c[1], c[0]]);
 
+    // Quitamos capas temporalmente para ver la ruta claramente
     if (map.hasLayer(cluster)) map.removeLayer(cluster);
     if (map.hasLayer(ductosLayer) && ductosVisibles) map.removeLayer(ductosLayer);
 
@@ -1024,7 +1045,6 @@
     rutaLayer = L.layerGroup([casing, main]).addTo(map);
     map.fitBounds(rutaLayer.getBounds(), { padding: [50,50], duration: 1.2 });
     
-    // Flag de llegada
     L.marker([destLat, destLon], {
       icon: L.divIcon({ className: '', html: `<i class="fas fa-flag-checkered" style="font-size:28px;color:${color};filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));"></i>`, iconSize: [28,28] })
     }).addTo(map).bindPopup(`<strong>Ruta desde ${origen.nombre}</strong><br>Distancia: ${resultado.distanciaKm.toFixed(1)} km<br>Tiempo: ${Math.round(resultado.duracionMin)} min`).openPopup();
@@ -1035,6 +1055,9 @@
   async function mostrarRuta(destLat, destLon) {
     await dibujarRuta(ANCLA_MORELIA, destLat, destLon);
   }
+
+  // 🆕 Botón de limpieza de ruta
+  document.getElementById('clearRouteBtn').addEventListener('click', limpiarRuta);
 
   // Escuchador de eventos para el botón de ruta dentro del popup
   document.addEventListener('click', function(e) {
@@ -1047,9 +1070,9 @@
     }
   });
 
-  // Limpiar ruta al hacer clic en el mapa
+  // Limpiar ruta al hacer clic en el mapa (solo si hay una ruta activa)
   map.on('click', function(e) {
-    limpiarRuta();
+    if (rutaActiva) limpiarRuta();
   });
 
   // ============================================================
