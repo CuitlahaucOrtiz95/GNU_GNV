@@ -126,6 +126,16 @@
     .toolbar .btn-loc.loading .loc-icon { display: none; }
     @keyframes spin { 100% { transform: rotate(360deg); } }
 
+    /* 🆕 Estilos para Tooltips */
+    [data-tooltip] { position: relative; cursor: pointer; }
+    [data-tooltip]:hover::after {
+      content: attr(data-tooltip);
+      position: absolute; bottom: calc(100% + 8px); left: 50%;
+      transform: translateX(-50%); background: #0f172a; color: #fff;
+      padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; white-space: nowrap;
+      z-index: 999; box-shadow: var(--shadow-md);
+    }
+
     .stage { display: flex; flex: 1; overflow: hidden; position: relative; }
     #map { flex: 1; height: 100%; min-height: 200px; z-index: 1; }
     
@@ -199,16 +209,52 @@
     .ducto-legend .reset-btn { background: none; border: none; color: var(--text-muted); font-size: 8px; cursor: pointer; padding: 0 2px; }
     .ducto-legend .reset-btn:hover { color: #ef4444; }
 
-    .popup-actions { margin-top: 8px; }
-    .popup-btn {
-      display: block; width: 100%; padding: 6px 12px; border-radius: 20px;
+    /* 🆕 Popup estilo tarjeta premium */
+    .leaflet-popup-content-wrapper {
+      border-radius: 12px !important;
+      padding: 0 !important;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    }
+    .leaflet-popup-content { margin: 0 !important; width: 260px !important; font-size: 0.8rem; font-family: 'Inter', sans-serif; }
+    .popup-card-header {
+      background: var(--primary); color: #fff;
+      padding: 12px 14px; font-weight: 600; font-size: 0.9rem;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .popup-card-header small { font-weight: 400; font-size: 0.65rem; opacity: 0.8; }
+    .popup-card-body { padding: 12px 14px 14px; background: #fff; color: var(--text-main); }
+    .popup-card-body .price-row { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 6px; }
+    .popup-card-body .price-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .popup-card-body .popup-btn {
+      display: block; width: 100%; padding: 8px 0; border-radius: 20px;
       border: none; background: var(--primary); color: #fff; font-weight: 600;
       font-size: 0.75rem; cursor: pointer; transition: background 0.2s ease;
-      text-align: center;
+      text-align: center; margin-top: 6px;
     }
-    .popup-btn:hover { background: var(--primary-hover); }
+    .popup-card-body .popup-btn:hover { background: var(--primary-hover); }
 
-    .leaflet-popup-content { font-size: 0.75rem; font-family: 'Inter', sans-serif; margin: 8px; }
+    /* 🆕 Efecto de resaltado en pines */
+    .marker-pop-in {
+      animation: marker-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transform-origin: bottom center;
+    }
+    @keyframes marker-pop {
+      0% { opacity: 0; transform: translateY(-10px) scale(0.4); }
+      60% { opacity: 1; transform: translateY(2px) scale(1.1); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .marker-bounce {
+      animation: marker-bounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transform-origin: bottom center;
+      z-index: 9999 !important;
+    }
+    @keyframes marker-bounce {
+      0%,100% { transform: translateY(0) scale(1); }
+      40% { transform: translateY(-14px) scale(1.25); }
+      70% { transform: translateY(-4px) scale(1.1); }
+    }
+
     .cluster-popup-list { max-height: 150px; overflow-y: auto; padding-right: 4px; }
     .cluster-popup-list .item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.7rem; }
     .cluster-popup-list .item:last-child { border-bottom: none; }
@@ -348,7 +394,7 @@
     </button>
     
     <!-- 🆕 NUEVO: Botón para limpiar la ruta -->
-    <button class="btn btn-danger" id="clearRouteBtn" title="Eliminar ruta del mapa" aria-label="Limpiar ruta">
+    <button class="btn btn-danger" id="clearRouteBtn" title="Eliminar ruta del mapa" data-tooltip="Limpiar ruta actual" aria-label="Limpiar ruta">
       <i class="fas fa-route"></i> <span class="label">Limpiar ruta</span>
     </button>
 
@@ -490,18 +536,49 @@
     return { label: '≥ $13.00', key: 'high', color: '#ef4444' };
   }
 
+  // 🆕 Función Toast para notificaciones visuales
+  function toast(msg, tipo, duracionMs) {
+    tipo = tipo || 'info'; duracionMs = duracionMs || 3500;
+    const cont = document.getElementById('toastContainer');
+    if (!cont) { console.warn(msg); return; }
+    const icono = tipo === 'error' ? 'fa-circle-exclamation' : tipo === 'success' ? 'fa-circle-check' : 'fa-circle-info';
+    const el = document.createElement('div');
+    el.className = 'toast toast-' + tipo;
+    el.innerHTML = '<i class="fas ' + icono + '"></i><span></span>';
+    el.querySelector('span').textContent = msg;
+    cont.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => {
+      el.classList.remove('show');
+      setTimeout(() => el.remove(), 300);
+    }, duracionMs);
+  }
+
   // ============================================================
-  //  3. CARGA DE ESTACIONES
+  //  3. CARGA DE ESTACIONES (Reescrito con JSON.parse - Más seguro y rápido)
   // ============================================================
+  // Primero intentamos cargar desde el archivo .js
   let rawData = window.ESTACIONES || [];
+  
+  // Intentar cargar desde localStorage (usando JSON, NO eval)
   const estacionesGuardado = localStorage.getItem('ESTACIONES_JS');
   if (estacionesGuardado) {
     try {
-      eval(estacionesGuardado);
-      rawData = window.ESTACIONES || [];
-      console.log('✅ Estaciones cargadas desde localStorage');
+      // Intentar parsear como JSON
+      const parsed = JSON.parse(estacionesGuardado);
+      if (Array.isArray(parsed)) {
+        rawData = parsed;
+        console.log('✅ Estaciones cargadas desde localStorage (JSON)');
+      }
     } catch (e) {
-      console.warn('Error al evaluar ESTACIONES_JS:', e);
+      // Si falla, intentar la sintaxis antigua de eval (migración automática)
+      try {
+        eval(estacionesGuardado);
+        rawData = window.ESTACIONES || [];
+        console.log('🔄 Estaciones migradas desde localStorage legacy');
+      } catch (e2) {
+        console.warn('Error al evaluar ESTACIONES_JS legacy:', e2);
+      }
     }
   }
 
@@ -560,9 +637,9 @@
   rebuildBaseLayers();
 
   // ============================================================
-  //  5. DUCTOS (código completo)
+  //  5. DUCTOS
   // ============================================================
-  const ductosData = window.DUCTOS_GAS || { type: "FeatureCollection", features: [] };
+  let ductosData = window.DUCTOS_GAS || { type: "FeatureCollection", features: [] };
   console.log(`📊 Ductos cargados: ${ductosData.features.length}`);
 
   const DUCTO_ESTILOS = {
@@ -735,7 +812,7 @@
   }
 
   function centrarEnDuctos(tipo) {
-    if (!ductosLayer || !ductosLayer.getLayers().length) { alert('No hay ductos cargados.'); return; }
+    if (!ductosLayer || !ductosLayer.getLayers().length) { toast('No hay ductos cargados.', 'error'); return; }
     const bounds = new L.LatLngBounds(); let encontrados = 0;
     const tipoNorm = tipo.trim().toLowerCase();
     ductosLayer.eachLayer(function(layer) {
@@ -750,7 +827,7 @@
         } catch (e) {}
       }
     });
-    if (encontrados === 0) { alert(`No se encontraron ductos del tipo "${tipo}".`); return; }
+    if (encontrados === 0) { toast(`No se encontraron ductos del tipo "${tipo}".`, 'error'); return; }
     if (bounds.isValid()) map.flyToBounds(bounds, { padding: [60, 60], duration: 1.2 });
   }
 
@@ -795,20 +872,13 @@
   document.getElementById('ductoFilter').addEventListener('change', function() { aplicarFiltroIterativo(this.value); });
   document.getElementById('toggleDuctosBtn').addEventListener('click', function() {
     if (ductosVisibles) {
-      // Si la ruta está activa, la capa ya no está en el mapa. Solo cambiamos la variable de estado y el icono.
       ductosVisibles = false;
       document.getElementById('ductosToggleIcon').className = 'fas fa-eye-slash';
-      // Si la ruta NO está activa y la capa existe en el mapa, la eliminamos.
-      if (!rutaActiva && ductosLayer && map.hasLayer(ductosLayer)) {
-        map.removeLayer(ductosLayer);
-      }
+      if (!rutaActiva && ductosLayer && map.hasLayer(ductosLayer)) map.removeLayer(ductosLayer);
     } else {
       ductosVisibles = true;
       document.getElementById('ductosToggleIcon').className = 'fas fa-eye';
-      // Añadimos la capa de ductos si no está activa la ruta y no está en el mapa.
-      if (!rutaActiva && ductosLayer && !map.hasLayer(ductosLayer)) {
-        map.addLayer(ductosLayer);
-      }
+      if (!rutaActiva && ductosLayer && !map.hasLayer(ductosLayer)) map.addLayer(ductosLayer);
     }
   });
 
@@ -843,24 +913,29 @@
     });
     stations.forEach(s => {
       const marker = L.marker([s.lat, s.lon], {
-        icon: L.divIcon({ className: '', html: pinSVG(s.priceColor), iconSize: [24,34], iconAnchor: [12,34], popupAnchor: [0,-32] }),
+        icon: L.divIcon({ className: 'marker-pop-in', html: pinSVG(s.priceColor), iconSize: [24,34], iconAnchor: [12,34], popupAnchor: [0,-32] }),
         title: s.nombre
       });
       
+      // 🆕 Popup estilo tarjeta
       marker.bindPopup(() => {
-        const p = s.precio ? `$${s.precio.toFixed(2)} / litro` : 'Sin precio';
-        return `<div style="padding:0.1rem;">
-          <strong style="font-size:0.9rem;color:var(--primary);">${s.nombre}</strong><br>
-          <span style="color:var(--text-muted);font-size:0.7rem;">${s.grupo} · ${s.estado || '...'}</span><br>
-          <div style="margin-top:4px; display:flex; align-items:center; gap:4px;">
-            <span style="display:block;width:8px;height:8px;border-radius:50%;background:${s.priceColor};"></span>
-            <span style="color:#0f172a;font-weight:600;font-size:0.75rem;">${p}</span>
+        const p = s.precio ? `$${s.precio.toFixed(2)}` : 'Sin precio';
+        const color = s.priceColor || '#94a3b8';
+        return `<div>
+          <div class="popup-card-header">
+            ${s.nombre}
+            <small>${s.estado || ''}</small>
           </div>
-          <div class="popup-actions">
-            <button class="popup-btn btn-route" data-lat="${s.lat}" data-lon="${s.lon}">🚗 Ruta desde Morelia</button>
+          <div class="popup-card-body">
+            <div class="price-row">
+              <span class="price-dot" style="background:${color};"></span>
+              ${p} / litro
+            </div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:6px;">${s.grupo}</div>
+            <button class="popup-btn btn-route" data-lat="${s.lat}" data-lon="${s.lon}" data-tooltip="Calcular ruta desde Morelia">🚗 Ruta desde Morelia</button>
           </div>
         </div>`;
-      }, { className: '', maxWidth: 220 });
+      }, { className: '', maxWidth: 260 });
       
       marker.data = s;
       markerMap.set(s, { marker, data: s });
@@ -937,13 +1012,35 @@
   });
 
   document.getElementById('clearAllBtn').addEventListener('click', () => {
-    limpiarRuta(); // 🆕 Limpiar ruta al limpiar filtros
+    limpiarRuta();
     activePrice = null; searchTerm = '';
     filterSelect.value = 'all'; document.getElementById('stateFilter').value = 'all';
     document.getElementById('searchInput').value = '';
     applyFilters();
     map.flyTo([23.5, -102.5], 5);
   });
+
+  // 🆕 Función para resaltar el pin desde el directorio (Rail)
+  function resaltarMarkerDesdeRail(s) {
+    const entry = markerMap.get(s);
+    if (entry) {
+      map.flyTo([s.lat, s.lon], 14, { duration: 1.2 });
+      entry.marker.openPopup();
+      
+      // Aplicar efecto de resaltado (bounce)
+      const el = entry.marker.getElement();
+      if (el) {
+        el.classList.remove('marker-bounce');
+        void el.offsetWidth; // Forzar reflow para reiniciar animación
+        el.classList.add('marker-bounce');
+        
+        // Eliminar clase después de 2 segundos
+        setTimeout(() => {
+          if (el) el.classList.remove('marker-bounce');
+        }, 2000);
+      }
+    }
+  }
 
   function renderList(items) {
     const ul = document.getElementById('list');
@@ -953,7 +1050,7 @@
     items.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(s => {
       const li = document.createElement('li');
       li.innerHTML = `<div class="top-row"><span class="name">${s.nombre}</span>${s.precio ? `<span class="price">$${s.precio.toFixed(2)}</span>` : ''}</div><span class="state-tag">${s.estado || '...'}</span>`;
-      li.onclick = () => { map.flyTo([s.lat, s.lon], 14); markerMap.get(s).marker.openPopup(); };
+      li.onclick = () => resaltarMarkerDesdeRail(s);
       frag.appendChild(li);
     });
     ul.appendChild(frag);
@@ -986,7 +1083,7 @@
   let locMarker, locCircle;
   locBtn.addEventListener('click', function() {
     if (locMarker) { map.removeLayer(locMarker); map.removeLayer(locCircle); locMarker=null; map.flyTo([23.5, -102.5], 5); return; }
-    if (!navigator.geolocation) return alert('Geolocalización no soportada.');
+    if (!navigator.geolocation) return toast('Geolocalización no soportada.', 'error');
     locBtn.classList.add('loading');
     navigator.geolocation.getCurrentPosition(pos => {
       const { latitude, longitude, accuracy } = pos.coords;
@@ -994,17 +1091,28 @@
       locMarker = L.marker([latitude, longitude], { icon: L.divIcon({ className: 'location-marker', html: '<div class="dot"></div>', iconSize: [18,18] }) }).addTo(map);
       locCircle = L.circle([latitude, longitude], { radius: accuracy, color: 'var(--secondary)', weight: 1 }).addTo(map);
       locBtn.classList.remove('loading');
-    }, () => { alert('No se pudo obtener la ubicación.'); locBtn.classList.remove('loading'); });
+    }, () => { toast('No se pudo obtener la ubicación.', 'error'); locBtn.classList.remove('loading'); });
   });
 
   // ============================================================
-  //  10. LÓGICA DE RUTA DESDE MORELIA (CORREGIDA)
+  //  10. LÓGICA DE RUTA DESDE MORELIA (Con Caché de Rutas 🚀)
   // ============================================================
   const ANCLA_MORELIA = { nombre: "Morelia", lat: 19.70480534245386, lon: -101.24479193126763 };
   let rutaLayer = null;
   let rutaActiva = false;
+  
+  // 🆕 Caché de rutas para evitar llamadas repetitivas a la API
+  const routeCache = new Map();
 
   async function calcularRuta(origenLat, origenLon, destinoLat, destinoLon) {
+    const key = `${origenLat}|${origenLon}|${destinoLat}|${destinoLon}`;
+    
+    // 1. Verificar si la ruta ya está en caché
+    if (routeCache.has(key)) {
+      console.log('⚡ Ruta recuperada de la caché');
+      return routeCache.get(key);
+    }
+
     const url = `https://router.project-osrm.org/route/v1/driving/${origenLon},${origenLat};${destinoLon},${destinoLat}?overview=full&geometries=geojson`;
     try {
       const resp = await fetch(url);
@@ -1012,15 +1120,22 @@
       const data = await resp.json();
       if (data.code !== 'Ok') throw new Error('Ruta no encontrada');
       const ruta = data.routes[0];
-      return { distanciaKm: ruta.distance / 1000, duracionMin: ruta.duration / 60, geometria: ruta.geometry.coordinates };
-    } catch (e) { console.error('Error calculando ruta:', e); return null; }
+      const result = { distanciaKm: ruta.distance / 1000, duracionMin: ruta.duration / 60, geometria: ruta.geometry.coordinates };
+      
+      // 2. Guardar en caché para la próxima vez
+      routeCache.set(key, result);
+      console.log('💾 Ruta guardada en la caché');
+      return result;
+    } catch (e) { 
+      console.error('Error calculando ruta:', e); 
+      return null; 
+    }
   }
 
   function limpiarRuta() {
     if (rutaLayer) { map.removeLayer(rutaLayer); rutaLayer = null; }
     rutaActiva = false;
     
-    // 🛠️ CORRECCIÓN: Asegurar que el clúster de estaciones y los ductos vuelvan al mapa
     if (!map.hasLayer(cluster)) map.addLayer(cluster);
     if (ductosLayer && !map.hasLayer(ductosLayer) && ductosVisibles) map.addLayer(ductosLayer);
     
@@ -1029,14 +1144,13 @@
   }
 
   async function dibujarRuta(origen, destLat, destLon, color) {
-    limpiarRuta(); // Limpiamos la ruta previa antes de dibujar una nueva
+    limpiarRuta();
     color = color || '#1F5CA9';
 
     const resultado = await calcularRuta(origen.lat, origen.lon, destLat, destLon);
-    if (!resultado) { alert('No se pudo calcular la ruta.'); return; }
+    if (!resultado) { toast('No se pudo calcular la ruta.', 'error'); return; }
     const coords = resultado.geometria.map(c => [c[1], c[0]]);
 
-    // Quitamos capas temporalmente para ver la ruta claramente
     if (map.hasLayer(cluster)) map.removeLayer(cluster);
     if (map.hasLayer(ductosLayer) && ductosVisibles) map.removeLayer(ductosLayer);
 
@@ -1056,7 +1170,6 @@
     await dibujarRuta(ANCLA_MORELIA, destLat, destLon);
   }
 
-  // 🆕 Botón de limpieza de ruta
   document.getElementById('clearRouteBtn').addEventListener('click', limpiarRuta);
 
   // Escuchador de eventos para el botón de ruta dentro del popup
@@ -1070,19 +1183,27 @@
     }
   });
 
-  // Limpiar ruta al hacer clic en el mapa (solo si hay una ruta activa)
   map.on('click', function(e) {
     if (rutaActiva) limpiarRuta();
   });
 
   // ============================================================
-  //  11. RECARGA DE DUCTOS Y ESTACIONES
+  //  11. RECARGA DE DUCTOS Y ESTACIONES (JSON.parse)
   // ============================================================
   function recargarDuctos() {
     const nuevoJS = localStorage.getItem('DUCTOS_JS');
     if (!nuevoJS) return;
     try {
-      eval(nuevoJS);
+      // Intentar parsear JSON primero, luego legacy
+      let parsed = null;
+      try { parsed = JSON.parse(nuevoJS); } catch(e) {}
+      
+      if (parsed && Array.isArray(parsed)) {
+        window.DUCTOS = parsed;
+      } else {
+        eval(nuevoJS);
+      }
+
       if (window.DUCTOS && Array.isArray(window.DUCTOS)) {
         const geojson = {
           type: "FeatureCollection",
@@ -1110,7 +1231,16 @@
     const nuevoJS = localStorage.getItem('ESTACIONES_JS');
     if (!nuevoJS) return;
     try {
-      eval(nuevoJS);
+      // Intentar parsear JSON primero, luego legacy
+      let parsed = null;
+      try { parsed = JSON.parse(nuevoJS); } catch(e) {}
+      
+      if (parsed && Array.isArray(parsed)) {
+        window.ESTACIONES = parsed;
+      } else {
+        eval(nuevoJS);
+      }
+
       const nuevos = window.ESTACIONES || [];
       stations.length = 0; stations.push(...deduplicate(nuevos));
       stations.forEach(s => { const r = getPriceRange(s.precio); s.priceKey = r.key; s.priceColor = r.color; s.priceLabel = r.label; });
@@ -1140,6 +1270,17 @@
   document.getElementById('rTotal').textContent = stations.length;
   document.getElementById('rGroups').textContent = grupos.length;
   setTimeout(() => map.invalidateSize(), 200);
+
+  // Crear contenedor de toasts si no existe (no lo tenía en el HTML original)
+  const cont = document.getElementById('toastContainer');
+  if (!cont) {
+    const newCont = document.createElement('div');
+    newCont.id = 'toastContainer';
+    newCont.className = 'toast-container';
+    document.body.appendChild(newCont);
+    // Reasignar la función toast global para usar el nuevo contenedor
+    window.toastContainer = newCont;
+  }
 
   function initStatesAndFilters() {
     const states = [...new Set(stations.map(s => s.estado).filter(Boolean))].sort();
